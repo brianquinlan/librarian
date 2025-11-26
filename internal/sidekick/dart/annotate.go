@@ -843,6 +843,8 @@ func (annotate *annotateModel) createFromJsonLine(field *api.Field, state *api.A
 		switch field.Typez {
 		case api.BYTES_TYPE:
 			return fmt.Sprintf("decodeListBytes(%s)%s", data, bang)
+		case api.DOUBLE_TYPE, api.FLOAT_TYPE:
+			return fmt.Sprintf("decodeListDouble(%s)%s", data, bang)
 		case api.ENUM_TYPE:
 			typeName := annotate.resolveEnumName(state.EnumByID[field.TypezID])
 			return fmt.Sprintf("decodeListEnum(%s, %s.fromJson)%s", data, typeName, bang)
