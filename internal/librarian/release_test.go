@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//     https://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,7 +23,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/googleapis/librarian/internal/config"
-	"github.com/googleapis/librarian/internal/language"
+	"github.com/googleapis/librarian/internal/yaml"
 )
 
 func TestReleaseCommand(t *testing.T) {
@@ -49,14 +49,14 @@ func TestReleaseCommand(t *testing.T) {
 			name: "library name",
 			args: []string{"librarian", "release", testlib},
 			wantVersions: map[string]string{
-				testlib: language.TestReleaseVersion,
+				testlib: testReleaseVersion,
 			},
 		},
 		{
 			name: "all flag",
 			args: []string{"librarian", "release", "--all"},
 			wantVersions: map[string]string{
-				testlib: language.TestReleaseVersion,
+				testlib: testReleaseVersion,
 			},
 		},
 	} {
@@ -66,8 +66,9 @@ func TestReleaseCommand(t *testing.T) {
 
 			configPath := filepath.Join(tempDir, librarianConfigPath)
 			configContent := fmt.Sprintf(`language: testhelper
-versions:
-  %s: 0.1.0
+libraries:
+  - name: %s
+    version: 0.1.0
 `, testlib)
 			if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
 				t.Fatal(err)
@@ -82,11 +83,15 @@ versions:
 			}
 
 			if test.wantVersions != nil {
-				cfg, err := config.Read(configPath)
+				cfg, err := yaml.Read[config.Config](configPath)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if diff := cmp.Diff(test.wantVersions, cfg.Versions); diff != "" {
+				gotVersions := make(map[string]string)
+				for _, lib := range cfg.Libraries {
+					gotVersions[lib.Name] = lib.Version
+				}
+				if diff := cmp.Diff(test.wantVersions, gotVersions); diff != "" {
 					t.Errorf("mismatch (-want +got):\n%s", diff)
 				}
 			}
