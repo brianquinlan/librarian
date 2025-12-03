@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//     https://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,7 +15,9 @@
 package fetch
 
 import (
+	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -23,6 +25,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -120,7 +123,7 @@ func TestRepoDir_ExtractedDirExists(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := RepoDir(testRepo, testCommit, testSHA256)
+	got, err := RepoDir(t.Context(), testRepo, testCommit, testSHA256)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +151,7 @@ func TestRepoDir_TarballExists(t *testing.T) {
 	}
 
 	sha := fmt.Sprintf("%x", sha256.Sum256(tarballData))
-	got, err := RepoDir(testRepo, testCommit, sha)
+	got, err := RepoDir(t.Context(), testRepo, testCommit, sha)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,6 +165,59 @@ func TestRepoDir_TarballExists(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(got, "main.go")); err != nil {
 		t.Errorf("expected main.go to exist: %v", err)
+	}
+}
+
+func TestRepoDir_MismatchTarball(t *testing.T) {
+	cache := t.TempDir()
+	t.Setenv(envLibrarianCache, cache)
+	// Set up a mock web server to fetch a tarball.
+	tarballData := createTestTarball(t, "googleapis-"+testCommit, map[string]string{
+		"README.md":                    "# googleapis",
+		"google/api/annotations.proto": "syntax = \"proto3\";",
+	})
+	expectedSHA := fmt.Sprintf("%x", sha256.Sum256(tarballData))
+
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/archive/"+testCommit+".tar.gz") {
+			http.NotFound(w, r)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write(tarballData)
+	}))
+	defer server.Close()
+
+	defer func(t http.RoundTripper) { http.DefaultTransport = t }(http.DefaultTransport)
+	http.DefaultTransport = server.Client().Transport
+	// Create an empty tarball file in the cache directory.
+	repo := strings.TrimPrefix(server.URL, "https://")
+	downloadDir := filepath.Join(cache, "download")
+	if err := os.MkdirAll(downloadDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	tarballName := fmt.Sprintf("%s@%s.tar.gz", repo, testCommit)
+	f, err := os.Create(filepath.Join(downloadDir, tarballName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	got, err := RepoDir(t.Context(), repo, testCommit, expectedSHA)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(filepath.Join(got, "README.md")); err != nil {
+		t.Errorf("expected README.md to exist: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(got, "google/api/annotations.proto")); err != nil {
+		t.Errorf("expected google/api/annotations.proto to exist: %v", err)
+	}
+
+	tarballPath := tarballPath(cache, repo, testCommit)
+	if _, err := os.Stat(tarballPath); err != nil {
+		t.Errorf("expected tarball to be cached at %q: %v", tarballPath, err)
 	}
 }
 
@@ -189,7 +245,7 @@ func TestRepoDir_Download(t *testing.T) {
 
 	repo := strings.TrimPrefix(server.URL, "https://")
 	expectedSHA := fmt.Sprintf("%x", sha256.Sum256(tarballData))
-	got, err := RepoDir(repo, testCommit, expectedSHA)
+	got, err := RepoDir(t.Context(), repo, testCommit, expectedSHA)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,5 +260,29 @@ func TestRepoDir_Download(t *testing.T) {
 	tarballPath := tarballPath(cachedir, repo, testCommit)
 	if _, err := os.Stat(tarballPath); err != nil {
 		t.Errorf("expected tarball to be cached at %q: %v", tarballPath, err)
+	}
+}
+
+func TestRepoDir_ContextDeadlineExceeded(t *testing.T) {
+	cachedir := t.TempDir()
+	t.Setenv(envLibrarianCache, cachedir)
+
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(100 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	defer func(t http.RoundTripper) { http.DefaultTransport = t }(http.DefaultTransport)
+	http.DefaultTransport = server.Client().Transport
+
+	// very short timeout to trigger context deadline exceeded.
+	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
+	defer cancel()
+
+	repo := strings.TrimPrefix(server.URL, "https://")
+	_, err := RepoDir(ctx, repo, testCommit, "any-sha")
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("expected context.DeadlineExceeded, got: %v", err)
 	}
 }
