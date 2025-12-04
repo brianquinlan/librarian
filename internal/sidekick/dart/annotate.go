@@ -797,7 +797,7 @@ func (annotate *annotateModel) annotateField(field *api.Field) {
 		FieldBehaviorRequired: fieldRequired,
 		DefaultValue:          defaultValue,
 		FromJson:              annotate.createFromJsonLine(field, state, implicitPresence),
-		ToJson:                createToJsonLine(field, state, implicitPresence),
+		ToJson:                annotate.createToJsonLine(field, state, implicitPresence, fieldRequired),
 		ConstDefault:          constDefault,
 	}
 }
@@ -813,7 +813,7 @@ func (annotate *annotateModel) decoder(typez api.Typez, typeid string, state *ap
 	case typez == api.INT32_TYPE || typez == api.FIXED32_TYPE ||
 		typez == api.SFIXED32_TYPE || typez == api.SINT32_TYPE ||
 		typez == api.UINT32_TYPE:
-		return "decodeInt"
+		return "decodeInt32"
 	case typez == api.BOOL_TYPE:
 		return "decodeBool"
 	case typez == api.STRING_TYPE:
@@ -826,6 +826,33 @@ func (annotate *annotateModel) decoder(typez api.Typez, typeid string, state *ap
 	case typez == api.MESSAGE_TYPE:
 		typeName := annotate.resolveMessageName(state.MessageByID[typeid], true)
 		return fmt.Sprintf("%s.fromJson", typeName)
+	default:
+		panic("unknown type")
+	}
+}
+
+func (annotate *annotateModel) encoder(typez api.Typez, typeid string, state *api.APIState, name string) string {
+	switch {
+	case typez == api.INT64_TYPE ||
+		typez == api.UINT64_TYPE || typez == api.SINT64_TYPE ||
+		typez == api.FIXED64_TYPE || typez == api.SFIXED64_TYPE:
+		return fmt.Sprintf("encodeInt64(%s)", name)
+	case typez == api.FLOAT_TYPE || typez == api.DOUBLE_TYPE:
+		return fmt.Sprintf("encodeDouble(%s)", name)
+	case typez == api.INT32_TYPE || typez == api.FIXED32_TYPE ||
+		typez == api.SFIXED32_TYPE || typez == api.SINT32_TYPE ||
+		typez == api.UINT32_TYPE:
+		return name // No encoding required.
+	case typez == api.BOOL_TYPE:
+		return name // No encoding required.
+	case typez == api.STRING_TYPE:
+		return name // No encoding required.
+	case typez == api.BYTES_TYPE:
+		return fmt.Sprintf("encodeBytes(%s)", name)
+	case typez == api.ENUM_TYPE:
+		return fmt.Sprintf("%s.toJson", name)
+	case typez == api.MESSAGE_TYPE:
+		return fmt.Sprintf("%s.toJson", name)
 	default:
 		panic("unknown type")
 	}
@@ -873,56 +900,35 @@ func (annotate *annotateModel) createFromJsonLine(field *api.Field, state *api.A
 	return fmt.Sprintf("switch (%s) { null => %s, Object $1 => %s($1)}", data, defaultValue, decoder)
 }
 
-func createToJsonLine(field *api.Field, state *api.APIState, required bool) string {
-	name := fieldName(field)
-	message := state.MessageByID[field.TypezID]
+/*
+   {{#Fields}}
+   {{#Codec.Nullable}}
+   if ({{{Codec.Name}}} case final $1?) '{{{JSONName}}}': {{{Codec.ToJson}}},
+   {{/Codec.Nullable}}
+   {{^Codec.Nullable}}
+       {{^Codec.FieldBehaviorRequired}}if ({{{Codec.Name}}} case final $1 when $1.isNotDefault){{/Codec.FieldBehaviorRequired}} '{{{JSONName}}}': {{{Codec.ToJson}}},
+   {{/Codec.Nullable}}
+   {{/Fields}}
+*/
 
-	isList := field.Repeated
-	isMap := message != nil && message.IsMap
-
-	bang := "!"
-	if required {
-		bang = ""
-	}
-
+func (annotate *annotateModel) createToJsonLine(field *api.Field, state *api.APIState, implicitPresence bool, fieldRequired bool) string {
 	switch {
-	case isList:
-		switch field.Typez {
-		case api.BYTES_TYPE:
-			return fmt.Sprintf("encodeListBytes(%s)", name)
-		case api.MESSAGE_TYPE, api.ENUM_TYPE:
-			return fmt.Sprintf("encodeList(%s)", name)
-		default:
-			// identity
-			return name
-		}
-	case isMap:
-		valueField := message.Fields[1]
+	case field.Repeated:
+		encoder := annotate.encoder(field.Typez, field.TypezID, state, "i")
+		return fmt.Sprintf("[for (final i in $1) %s]", encoder)
+	case field.Map:
+		message := state.MessageByID[field.TypezID]
+		keyType := message.Fields[0].Typez
+		keyTypeID := message.Fields[0].TypezID
+		keyEncoder := annotate.encoder(keyType, keyTypeID, state, "e.key")
+		valueType := message.Fields[1].Typez
+		valueTypeID := message.Fields[1].TypezID
+		valueEncoder := annotate.encoder(valueType, valueTypeID, state, "e.value")
 
-		switch valueField.Typez {
-		case api.BYTES_TYPE:
-			return fmt.Sprintf("encodeMapBytes(%s)", name)
-		case api.MESSAGE_TYPE, api.ENUM_TYPE:
-			return fmt.Sprintf("encodeMap(%s)", name)
-		default:
-			// identity
-			return name
-		}
-	case field.Typez == api.MESSAGE_TYPE || field.Typez == api.ENUM_TYPE:
-		return fmt.Sprintf("%s%s.toJson()", name, bang)
-	case field.Typez == api.BYTES_TYPE:
-		return fmt.Sprintf("encodeBytes(%s)", name)
-	case field.Typez == api.INT64_TYPE ||
-		field.Typez == api.UINT64_TYPE || field.Typez == api.SINT64_TYPE ||
-		field.Typez == api.FIXED64_TYPE || field.Typez == api.SFIXED64_TYPE:
-		return fmt.Sprintf("encodeInt64(%s)", name)
-	case field.Typez == api.FLOAT_TYPE || field.Typez == api.DOUBLE_TYPE:
-		return fmt.Sprintf("encodeDouble(%s)", name)
-	default:
+		return fmt.Sprintf("{for (final e in $1.entries) %s: %s}", keyEncoder, valueEncoder)
 	}
 
-	// No encoding necessary.
-	return name
+	return annotate.encoder(field.Typez, field.TypezID, state, "$1")
 }
 
 // buildQueryLines builds a string or strings representing query parameters for the given field.
