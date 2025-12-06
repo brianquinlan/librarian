@@ -838,26 +838,32 @@ func (annotate *annotateModel) decoder(typez api.Typez, typeid string, state *ap
 }
 
 func (annotate *annotateModel) encoder(typez api.Typez, typeid string, state *api.APIState, name string) string {
-	switch {
-	case typez == api.INT64_TYPE ||
-		typez == api.UINT64_TYPE || typez == api.SINT64_TYPE ||
-		typez == api.FIXED64_TYPE || typez == api.SFIXED64_TYPE:
+	switch typez {
+	case api.INT64_TYPE,
+		api.SINT64_TYPE,
+		api.SFIXED64_TYPE:
 		return fmt.Sprintf("encodeInt64(%s)", name)
-	case typez == api.FLOAT_TYPE || typez == api.DOUBLE_TYPE:
+	case api.FIXED64_TYPE,
+		api.UINT64_TYPE:
+		return fmt.Sprintf("encodeUint64(%s)", name)
+	case api.FLOAT_TYPE,
+		api.DOUBLE_TYPE:
 		return fmt.Sprintf("encodeDouble(%s)", name)
-	case typez == api.INT32_TYPE || typez == api.FIXED32_TYPE ||
-		typez == api.SFIXED32_TYPE || typez == api.SINT32_TYPE ||
-		typez == api.UINT32_TYPE:
+	case api.INT32_TYPE,
+		api.FIXED32_TYPE,
+		api.SFIXED32_TYPE,
+		api.SINT32_TYPE,
+		api.UINT32_TYPE:
 		return name // No encoding required.
-	case typez == api.BOOL_TYPE:
+	case api.BOOL_TYPE:
 		return name // No encoding required.
-	case typez == api.STRING_TYPE:
+	case api.STRING_TYPE:
 		return name // No encoding required.
-	case typez == api.BYTES_TYPE:
+	case api.BYTES_TYPE:
 		return fmt.Sprintf("encodeBytes(%s)", name)
-	case typez == api.ENUM_TYPE:
+	case api.ENUM_TYPE:
 		return fmt.Sprintf("%s.toJson()", name)
-	case typez == api.MESSAGE_TYPE:
+	case api.MESSAGE_TYPE:
 		return fmt.Sprintf("%s.toJson()", name)
 	default:
 		panic("unknown type")
@@ -889,7 +895,7 @@ func (annotate *annotateModel) createFromJsonLine(field *api.Field, state *api.A
 		decoder := annotate.decoder(field.Typez, field.TypezID, state)
 		return fmt.Sprintf(
 			"switch (%s) { null => %s, List<Object?> $1 => [for (final i in $1) %s(i)], "+
-				"_ => throw FormatException('\"%s\" is not a list') }",
+				"_ => throw const FormatException('\"%s\" is not a list') }",
 			data, defaultValue, decoder, field.JSONName)
 	case field.Map:
 		message := state.MessageByID[field.TypezID]
@@ -902,7 +908,7 @@ func (annotate *annotateModel) createFromJsonLine(field *api.Field, state *api.A
 
 		return fmt.Sprintf(
 			"switch (%s) { null => %s, Map<String, Object?> $1 => {for (final e in $1.entries) %s(e.key): %s(e.value)}, "+
-				"_ => throw FormatException('\"%s\" is not an object') }",
+				"_ => throw const FormatException('\"%s\" is not an object') }",
 			data, defaultValue, keyDecoder, valueDecoder, field.JSONName)
 	}
 
