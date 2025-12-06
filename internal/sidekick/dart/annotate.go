@@ -850,9 +850,9 @@ func (annotate *annotateModel) encoder(typez api.Typez, typeid string, state *ap
 	case typez == api.BYTES_TYPE:
 		return fmt.Sprintf("encodeBytes(%s)", name)
 	case typez == api.ENUM_TYPE:
-		return fmt.Sprintf("%s.toJson", name)
+		return fmt.Sprintf("%s.toJson()", name)
 	case typez == api.MESSAGE_TYPE:
-		return fmt.Sprintf("%s.toJson", name)
+		return fmt.Sprintf("%s.toJson()", name)
 	default:
 		panic("unknown type")
 	}
@@ -900,22 +900,22 @@ func (annotate *annotateModel) createFromJsonLine(field *api.Field, state *api.A
 	return fmt.Sprintf("switch (%s) { null => %s, Object $1 => %s($1)}", data, defaultValue, decoder)
 }
 
-/*
-   {{#Fields}}
-   {{#Codec.Nullable}}
-   if ({{{Codec.Name}}} case final $1?) '{{{JSONName}}}': {{{Codec.ToJson}}},
-   {{/Codec.Nullable}}
-   {{^Codec.Nullable}}
-       {{^Codec.FieldBehaviorRequired}}if ({{{Codec.Name}}} case final $1 when $1.isNotDefault){{/Codec.FieldBehaviorRequired}} '{{{JSONName}}}': {{{Codec.ToJson}}},
-   {{/Codec.Nullable}}
-   {{/Fields}}
-*/
-
 func (annotate *annotateModel) createToJsonLine(field *api.Field, state *api.APIState, implicitPresence bool, fieldRequired bool) string {
+	condition := ""
+	encodingName := fieldName(field)
+	if !implicitPresence {
+		condition = fmt.Sprintf("if (%s case final $1?)", fieldName(field))
+		encodingName = "$1"
+	} else if !fieldRequired {
+		condition = fmt.Sprintf("if (%s.isNotDefault)", fieldName(field))
+	}
+	key := fmt.Sprintf("'%s': ", field.JSONName)
+
+	var value string
 	switch {
 	case field.Repeated:
 		encoder := annotate.encoder(field.Typez, field.TypezID, state, "i")
-		return fmt.Sprintf("[for (final i in $1) %s]", encoder)
+		value = fmt.Sprintf("[for (final i in %s) %s]", encodingName, encoder)
 	case field.Map:
 		message := state.MessageByID[field.TypezID]
 		keyType := message.Fields[0].Typez
@@ -925,10 +925,12 @@ func (annotate *annotateModel) createToJsonLine(field *api.Field, state *api.API
 		valueTypeID := message.Fields[1].TypezID
 		valueEncoder := annotate.encoder(valueType, valueTypeID, state, "e.value")
 
-		return fmt.Sprintf("{for (final e in $1.entries) %s: %s}", keyEncoder, valueEncoder)
+		value = fmt.Sprintf("{for (final e in %s.entries) %s: %s}", encodingName, keyEncoder, valueEncoder)
+	default:
+		value = annotate.encoder(field.Typez, field.TypezID, state, encodingName)
 	}
 
-	return annotate.encoder(field.Typez, field.TypezID, state, "$1")
+	return fmt.Sprintf("%s%s%s", condition, key, value)
 }
 
 // buildQueryLines builds a string or strings representing query parameters for the given field.
