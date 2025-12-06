@@ -42,7 +42,7 @@ var defaultValues = map[api.Typez]struct {
 	api.BYTES_TYPE:    {"Uint8List(0)", false},
 	api.DOUBLE_TYPE:   {"0", true},
 	api.FIXED32_TYPE:  {"0", true},
-	api.FIXED64_TYPE:  {"0", true},
+	api.FIXED64_TYPE:  {"BigInt.zero", false},
 	api.FLOAT_TYPE:    {"0", true},
 	api.INT32_TYPE:    {"0", true},
 	api.INT64_TYPE:    {"0", true},
@@ -52,7 +52,7 @@ var defaultValues = map[api.Typez]struct {
 	api.SINT64_TYPE:   {"0", true},
 	api.STRING_TYPE:   {"''", true},
 	api.UINT32_TYPE:   {"0", true},
-	api.UINT64_TYPE:   {"0", true},
+	api.UINT64_TYPE:   {"BigInt.zero", false},
 }
 
 type modelAnnotations struct {
@@ -803,27 +803,33 @@ func (annotate *annotateModel) annotateField(field *api.Field) {
 }
 
 func (annotate *annotateModel) decoder(typez api.Typez, typeid string, state *api.APIState) string {
-	switch {
-	case typez == api.INT64_TYPE ||
-		typez == api.UINT64_TYPE || typez == api.SINT64_TYPE ||
-		typez == api.FIXED64_TYPE || typez == api.SFIXED64_TYPE:
+	switch typez {
+	case api.INT64_TYPE,
+		api.SINT64_TYPE,
+		api.SFIXED64_TYPE:
 		return "decodeInt64"
-	case typez == api.FLOAT_TYPE || typez == api.DOUBLE_TYPE:
+	case api.FIXED64_TYPE,
+		api.UINT64_TYPE:
+		return "decodeUint64"
+	case api.FLOAT_TYPE,
+		api.DOUBLE_TYPE:
 		return "decodeDouble"
-	case typez == api.INT32_TYPE || typez == api.FIXED32_TYPE ||
-		typez == api.SFIXED32_TYPE || typez == api.SINT32_TYPE ||
-		typez == api.UINT32_TYPE:
-		return "decodeInt32"
-	case typez == api.BOOL_TYPE:
+	case api.INT32_TYPE,
+		api.FIXED32_TYPE,
+		api.SFIXED32_TYPE,
+		api.SINT32_TYPE,
+		api.UINT32_TYPE:
+		return "decodeInt"
+	case api.BOOL_TYPE:
 		return "decodeBool"
-	case typez == api.STRING_TYPE:
+	case api.STRING_TYPE:
 		return "decodeString"
-	case typez == api.BYTES_TYPE:
+	case api.BYTES_TYPE:
 		return "decodeBytes"
-	case typez == api.ENUM_TYPE:
+	case api.ENUM_TYPE:
 		typeName := annotate.resolveEnumName(state.EnumByID[typeid])
 		return fmt.Sprintf("%s.fromJson", typeName)
-	case typez == api.MESSAGE_TYPE:
+	case api.MESSAGE_TYPE:
 		typeName := annotate.resolveMessageName(state.MessageByID[typeid], true)
 		return fmt.Sprintf("%s.fromJson", typeName)
 	default:
@@ -880,9 +886,13 @@ func (annotate *annotateModel) createFromJsonLine(field *api.Field, state *api.A
 	// NullValue and Any have null as an encoding.
 
 	switch {
+	// Value.NullValue is encoded as null in JSON so lists and map values must match on nullable objects.
 	case field.Repeated:
 		decoder := annotate.decoder(field.Typez, field.TypezID, state)
-		return fmt.Sprintf("switch (%s) { null => %s, List<Object?> $1 => [for (final i in $1) %s(i)], _ => throw TypeError() }", data, defaultValue, decoder)
+		return fmt.Sprintf(
+			"switch (%s) { null => %s, List<Object?> $1 => [for (final i in $1) %s(i)], "+
+				"_ => throw FormatException('\"%s\" is not a list') }",
+			data, defaultValue, decoder, field.JSONName)
 	case field.Map:
 		message := state.MessageByID[field.TypezID]
 		keyType := message.Fields[0].Typez
@@ -892,7 +902,10 @@ func (annotate *annotateModel) createFromJsonLine(field *api.Field, state *api.A
 		valueTypeID := message.Fields[1].TypezID
 		valueDecoder := annotate.decoder(valueType, valueTypeID, state)
 
-		return fmt.Sprintf("switch (%s) { null => %s, Map<String, Object?> $1 => {for (final e in $1.entries) %s(e.key): %s(e.value)}, _ => throw TypeError() }", data, defaultValue, keyDecoder, valueDecoder)
+		return fmt.Sprintf(
+			"switch (%s) { null => %s, Map<String, Object?> $1 => {for (final e in $1.entries) %s(e.key): %s(e.value)}, "+
+				"_ => throw FormatException('\"%s\" is not an object') }",
+			data, defaultValue, keyDecoder, valueDecoder, field.JSONName)
 	}
 
 	decoder := annotate.decoder(field.Typez, field.TypezID, state)
@@ -1062,9 +1075,10 @@ func (annotate *annotateModel) fieldType(f *api.Field) string {
 	case api.INT32_TYPE, api.UINT32_TYPE, api.SINT32_TYPE,
 		api.FIXED32_TYPE, api.SFIXED32_TYPE:
 		out = "int"
-	case api.INT64_TYPE, api.UINT64_TYPE, api.SINT64_TYPE,
-		api.FIXED64_TYPE, api.SFIXED64_TYPE:
+	case api.INT64_TYPE, api.SINT64_TYPE, api.SFIXED64_TYPE:
 		out = "int"
+	case api.FIXED64_TYPE, api.UINT64_TYPE:
+		out = "BigInt"
 	case api.FLOAT_TYPE, api.DOUBLE_TYPE:
 		out = "double"
 	case api.STRING_TYPE:
