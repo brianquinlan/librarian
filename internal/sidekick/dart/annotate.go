@@ -883,8 +883,6 @@ func (annotate *annotateModel) createFromJsonLine(field *api.Field, state *api.A
 		}
 	}
 
-	// NullValue and Any have null as an encoding.
-
 	switch {
 	// Value.NullValue is encoded as null in JSON so lists and map values must match on nullable objects.
 	case field.Repeated:
