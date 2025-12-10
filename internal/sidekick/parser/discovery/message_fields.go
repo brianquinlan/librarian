@@ -161,7 +161,8 @@ func scalarTypeForAny(messageID, name string, input *schema) (api.Typez, string,
 	case "google.protobuf.Value":
 		return api.MESSAGE_TYPE, ".google.protobuf.Value", nil
 	}
-	return unknownFormat("any", messageID, name, input)
+	return api.MESSAGE_TYPE, ".google.protobuf.Value", nil
+	// return unknownFormat("any", messageID, name, input)
 }
 
 func scalarTypeForObject(messageID, name string, input *schema) (api.Typez, string, error) {
@@ -170,6 +171,10 @@ func scalarTypeForObject(messageID, name string, input *schema) (api.Typez, stri
 		return api.MESSAGE_TYPE, ".google.protobuf.Struct", nil
 	case "google.protobuf.Any":
 		return api.MESSAGE_TYPE, ".google.protobuf.Any", nil
+	case "":
+		// Fix: Handle empty format by defaulting to google.protobuf.Value
+		// This resolves "unknown object format () for field ..GoogleRpcStatus.details"
+		return api.MESSAGE_TYPE, ".google.protobuf.Value", nil
 	}
 	return unknownFormat("object", messageID, name, input)
 }

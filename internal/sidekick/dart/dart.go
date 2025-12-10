@@ -119,6 +119,7 @@ var reservedNames = map[string]string{
 	// Names from dart:core to avoid.
 	"bool":   "",
 	"double": "",
+	"Object": "",
 }
 
 func messageName(m *api.Message) string {

@@ -36,7 +36,9 @@ func makeServiceMethods(model *api.API, service *api.Service, doc *document, res
 	for _, input := range resource.Methods {
 		method, err := makeMethod(model, parent, doc, input)
 		if err != nil {
-			return err
+			fmt.Printf("skipping method %s: %v\n", input.Name, err)
+			continue
+			//return err
 		}
 		model.State.MethodByID[method.ID] = method
 		service.Methods = append(service.Methods, method)
@@ -133,6 +135,7 @@ func makeMethod(model *api.API, parent *api.Message, doc *document, input *metho
 		Deprecated:    input.Deprecated,
 		InputTypeID:   requestMessage.ID,
 		OutputTypeID:  outputID,
+		ReturnsEmpty:  outputID == ".google.protobuf.Empty",
 		PathInfo: &api.PathInfo{
 			Bindings:      []*api.PathBinding{binding},
 			BodyFieldPath: bodyPathField,
