@@ -1083,40 +1083,15 @@ func (annotate *annotateModel) buildQueryLines(
 	ref := fmt.Sprintf("%s%s", refPrefix, fieldName(field))
 	param := fmt.Sprintf("%s%s", paramPrefix, field.JSONName)
 
-	var preable string
 	if codec.Nullable {
-		if field.Typez == api.MESSAGE_TYPE {
-			_, hasCustomEncoding := usesCustomEncoding[field.TypezID]
-			if hasCustomEncoding {
-				return append(result, fmt.Sprintf("'%s': ?%s?.toJson()", param, ref))
-			}
+		return annotate.buildNullableQueryLines(result, ref, param, field, message, state)
+	}
 
-			// Unroll the fields for messages.
-			for _, field := range message.Fields {
-				result = annotate.buildQueryLines(
-					result, ref+"?.", true, param+".", field, state)
-			}
-			return result
-		}
-
-		var expr string
-		switch field.Typez {
-		case api.STRING_TYPE:
-			expr = ref
-		case api.BYTES_TYPE:
-			expr = fmt.Sprintf("encodeBytes(%s)", ref)
-		case api.ENUM_TYPE:
-			expr = fmt.Sprintf("%s?.value", ref)
-		default:
-			expr = fmt.Sprintf("%s?.toString()", ref)
-		}
-		return append(result, fmt.Sprintf("'%s': ?%s", param, expr))
+	var preable string
+	if couldRefPrefixBeNull {
+		preable = fmt.Sprintf("if (%s case final $1? when $1.isNotDefault) '%s'", ref, param)
 	} else {
-		if couldRefPrefixBeNull {
-			preable = fmt.Sprintf("if (%s case final $1? when $1.isNotDefault) '%s'", ref, param)
-		} else {
-			preable = fmt.Sprintf("if (%s case final $1 when $1.isNotDefault) '%s'", ref, param)
-		}
+		preable = fmt.Sprintf("if (%s case final $1 when $1.isNotDefault) '%s'", ref, param)
 	}
 
 	switch {
@@ -1145,11 +1120,6 @@ func (annotate *annotateModel) buildQueryLines(
 		return append(result, fmt.Sprintf("/* unhandled query param type: %d */", field.Typez))
 
 	case field.Typez == api.MESSAGE_TYPE:
-		deref := "."
-		if codec.Nullable {
-			deref = "?."
-		}
-
 		_, hasCustomEncoding := usesCustomEncoding[field.TypezID]
 		if hasCustomEncoding {
 			// Example: 'fieldMask': fieldMask!.toJson()
@@ -1159,7 +1129,7 @@ func (annotate *annotateModel) buildQueryLines(
 		// Unroll the fields for messages.
 		for _, field := range message.Fields {
 			result = annotate.buildQueryLines(
-				result, ref+deref, couldRefPrefixBeNull || codec.Nullable, param+".", field, state)
+				result, ref+".", couldRefPrefixBeNull, param+".", field, state)
 		}
 		return result
 
@@ -1182,6 +1152,52 @@ func (annotate *annotateModel) buildQueryLines(
 		slog.Error("unhandled query param", "type", field.Typez)
 		return append(result, fmt.Sprintf("/* unhandled query param type: %d */", field.Typez))
 	}
+}
+
+func (annotate *annotateModel) buildNullableQueryLines(
+	result []string, ref string, param string, field *api.Field, message *api.Message, state *api.APIState,
+) []string {
+	if field.Typez == api.MESSAGE_TYPE {
+		_, hasCustomEncoding := usesCustomEncoding[field.TypezID]
+		if hasCustomEncoding {
+			return append(result, fmt.Sprintf("'%s': ?%s?.toJson()", param, ref))
+		}
+
+		// Unroll the fields for messages.
+		for _, field := range message.Fields {
+			result = annotate.buildQueryLines(
+				result, ref+"?.", true, param+".", field, state)
+		}
+		return result
+	}
+
+	var expr string
+	switch field.Typez {
+	case api.STRING_TYPE:
+		expr = ref
+	case api.BYTES_TYPE:
+		expr = fmt.Sprintf("encodeBytes(%s)", ref)
+	case api.ENUM_TYPE:
+		expr = fmt.Sprintf("%s?.value", ref)
+	case api.BOOL_TYPE,
+		api.INT32_TYPE,
+		api.UINT32_TYPE,
+		api.SINT32_TYPE,
+		api.FIXED32_TYPE,
+		api.SFIXED32_TYPE,
+		api.INT64_TYPE,
+		api.UINT64_TYPE,
+		api.SINT64_TYPE,
+		api.FIXED64_TYPE,
+		api.SFIXED64_TYPE,
+		api.FLOAT_TYPE,
+		api.DOUBLE_TYPE:
+		expr = fmt.Sprintf("%s?.toString()", ref)
+	default:
+		slog.Error("unhandled query param", "type", field.Typez)
+		return append(result, fmt.Sprintf("/* unhandled query param type: %d */", field.Typez))
+	}
+	return append(result, fmt.Sprintf("'%s': ?%s", param, expr))
 }
 
 func (annotate *annotateModel) annotateEnum(enum *api.Enum) {
