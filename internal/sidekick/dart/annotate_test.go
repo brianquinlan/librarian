@@ -685,7 +685,7 @@ func TestBuildQueryLines_Primitives(t *testing.T) {
 		// one ofs
 		{
 			&api.Field{Name: "bool", JSONName: "bool", Typez: api.BOOL_TYPE, IsOneOf: true},
-			[]string{"'bool': ?result.bool?.toString()"},
+			[]string{"'bool': ?result.bool$?.toString()"},
 		},
 
 		// repeated primitives
@@ -831,28 +831,28 @@ func TestBuildQueryLines_Messages(t *testing.T) {
 		JSONName: "message3",
 		Typez:    api.MESSAGE_TYPE,
 		TypezID:  updateRequest.ID,
-	} /*
-		fieldMaskField := &api.Field{
-			Name:     "field_mask",
-			JSONName: "fieldMask",
-			Typez:    api.MESSAGE_TYPE,
-			TypezID:  ".google.protobuf.FieldMask",
-		}
+	}
+	fieldMaskField := &api.Field{
+		Name:     "field_mask",
+		JSONName: "fieldMask",
+		Typez:    api.MESSAGE_TYPE,
+		TypezID:  ".google.protobuf.FieldMask",
+	}
 
-		durationField := &api.Field{
-			Name:     "duration",
-			JSONName: "duration",
-			Typez:    api.MESSAGE_TYPE,
-			TypezID:  ".google.protobuf.Duration",
-		}
+	durationField := &api.Field{
+		Name:     "duration",
+		JSONName: "duration",
+		Typez:    api.MESSAGE_TYPE,
+		TypezID:  ".google.protobuf.Duration",
+	}
 
-		timestampField := &api.Field{
-			Name:     "time",
-			JSONName: "time",
-			Typez:    api.MESSAGE_TYPE,
-			TypezID:  ".google.protobuf.Timestamp",
-		}
-	*/
+	timestampField := &api.Field{
+		Name:     "time",
+		JSONName: "time",
+		Typez:    api.MESSAGE_TYPE,
+		TypezID:  ".google.protobuf.Timestamp",
+	}
+
 	// messages
 	got := annotate.buildQueryLines([]string{}, "result.", false, "", messageField1, model.State)
 	want := []string{
@@ -865,8 +865,8 @@ func TestBuildQueryLines_Messages(t *testing.T) {
 
 	got = annotate.buildQueryLines([]string{}, "result.", false, "", messageField2, model.State)
 	want = []string{
-		"'message2.data': ?result.message2?.data",
-		"'message2.dataCrc32c': ?result.message2?.dataCrc32c",
+		"'message2.data': ?encodeBytes(result.message2?.data)",
+		"'message2.dataCrc32c': ?result.message2?.dataCrc32C?.toString()",
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("mismatch in TestBuildQueryLines (-want, +got)\n:%s", diff)
@@ -883,32 +883,29 @@ func TestBuildQueryLines_Messages(t *testing.T) {
 	}
 
 	// custom encoded messages
-	/*
-		XXX
-		got = annotate.buildQueryLines([]string{}, "result.", false, "", fieldMaskField, model.State)
-		want = []string{
-			"if (result.fieldMask case final $1?) 'fieldMask': $1.toJson()",
-		}
-		if diff := cmp.Diff(want, got); diff != "" {
-			t.Errorf("mismatch in TestBuildQueryLines (-want, +got)\n:%s", diff)
-		}
+	got = annotate.buildQueryLines([]string{}, "result.", false, "", fieldMaskField, model.State)
+	want = []string{
+		"'fieldMask': ?result.fieldMask?.toJson()",
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("mismatch in TestBuildQueryLines (-want, +got)\n:%s", diff)
+	}
 
-		got = annotate.buildQueryLines([]string{}, "result.", false, "", durationField, model.State)
-		want = []string{
-			"if (result.duration case final $1?) 'duration': $1.toJson()",
-		}
-		if diff := cmp.Diff(want, got); diff != "" {
-			t.Errorf("mismatch in TestBuildQueryLines (-want, +got)\n:%s", diff)
-		}
+	got = annotate.buildQueryLines([]string{}, "result.", false, "", durationField, model.State)
+	want = []string{
+		"'duration': ?result.duration?.toJson()",
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("mismatch in TestBuildQueryLines (-want, +got)\n:%s", diff)
+	}
 
-		got = annotate.buildQueryLines([]string{}, "result.", false, "", timestampField, model.State)
-		want = []string{
-			"if (result.time case final $1?) 'time': $1.toJson()",
-		}
-		if diff := cmp.Diff(want, got); diff != "" {
-			t.Errorf("mismatch in TestBuildQueryLines (-want, +got)\n:%s", diff)
-		}
-	*/
+	got = annotate.buildQueryLines([]string{}, "result.", false, "", timestampField, model.State)
+	want = []string{
+		"'time': ?result.time?.toJson()",
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("mismatch in TestBuildQueryLines (-want, +got)\n:%s", diff)
+	}
 }
 
 func TestCreateFromJsonLine(t *testing.T) {

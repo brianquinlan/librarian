@@ -1085,7 +1085,32 @@ func (annotate *annotateModel) buildQueryLines(
 
 	var preable string
 	if codec.Nullable {
-		preable = fmt.Sprintf("if (%s case final $1?) '%s'", ref, param)
+		if field.Typez == api.MESSAGE_TYPE {
+			_, hasCustomEncoding := usesCustomEncoding[field.TypezID]
+			if hasCustomEncoding {
+				return append(result, fmt.Sprintf("'%s': ?%s?.toJson()", param, ref))
+			}
+
+			// Unroll the fields for messages.
+			for _, field := range message.Fields {
+				result = annotate.buildQueryLines(
+					result, ref+"?.", true, param+".", field, state)
+			}
+			return result
+		}
+
+		var expr string
+		switch field.Typez {
+		case api.STRING_TYPE:
+			expr = ref
+		case api.BYTES_TYPE:
+			expr = fmt.Sprintf("encodeBytes(%s)", ref)
+		case api.ENUM_TYPE:
+			expr = fmt.Sprintf("%s?.value", ref)
+		default:
+			expr = fmt.Sprintf("%s?.toString()", ref)
+		}
+		return append(result, fmt.Sprintf("'%s': ?%s", param, expr))
 	} else {
 		if couldRefPrefixBeNull {
 			preable = fmt.Sprintf("if (%s case final $1? when $1.isNotDefault) '%s'", ref, param)
