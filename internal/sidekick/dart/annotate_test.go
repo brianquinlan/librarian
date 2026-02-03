@@ -831,28 +831,28 @@ func TestBuildQueryLines_Messages(t *testing.T) {
 		JSONName: "message3",
 		Typez:    api.MESSAGE_TYPE,
 		TypezID:  updateRequest.ID,
-	}
-	fieldMaskField := &api.Field{
-		Name:     "field_mask",
-		JSONName: "fieldMask",
-		Typez:    api.MESSAGE_TYPE,
-		TypezID:  ".google.protobuf.FieldMask",
-	}
+	} /*
+		fieldMaskField := &api.Field{
+			Name:     "field_mask",
+			JSONName: "fieldMask",
+			Typez:    api.MESSAGE_TYPE,
+			TypezID:  ".google.protobuf.FieldMask",
+		}
 
-	durationField := &api.Field{
-		Name:     "duration",
-		JSONName: "duration",
-		Typez:    api.MESSAGE_TYPE,
-		TypezID:  ".google.protobuf.Duration",
-	}
+		durationField := &api.Field{
+			Name:     "duration",
+			JSONName: "duration",
+			Typez:    api.MESSAGE_TYPE,
+			TypezID:  ".google.protobuf.Duration",
+		}
 
-	timestampField := &api.Field{
-		Name:     "time",
-		JSONName: "time",
-		Typez:    api.MESSAGE_TYPE,
-		TypezID:  ".google.protobuf.Timestamp",
-	}
-
+		timestampField := &api.Field{
+			Name:     "time",
+			JSONName: "time",
+			Typez:    api.MESSAGE_TYPE,
+			TypezID:  ".google.protobuf.Timestamp",
+		}
+	*/
 	// messages
 	got := annotate.buildQueryLines([]string{}, "result.", false, "", messageField1, model.State)
 	want := []string{
