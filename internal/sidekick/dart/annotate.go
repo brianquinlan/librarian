@@ -820,7 +820,7 @@ func (annotate *annotateModel) annotateField(field *api.Field) {
 		FieldBehaviorRequired: fieldRequired,
 		DefaultValue:          defaultValue,
 		FromJson:              annotate.createFromJsonLine(field, state, implicitPresence),
-		ToJson:                createToJsonLine(field, state),
+		ToJson:                createToJsonLine(field, state, implicitPresence),
 		ConstDefault:          constDefault,
 	}
 }
@@ -893,7 +893,7 @@ func (annotate *annotateModel) keyDecoder(typez api.Typez) string {
 //
 //	encoder(api.STRING_TYPE, "a_string_field") => ("a_string_field", false)
 //	encoder(api.MESSAGE_TYPE, "a_message_field") => ("a_message_field.toJson()", true)
-func encoder(typez api.Typez, name string) (string, bool) {
+func encoder(typez api.Typez, name string, implicitPresence bool) (string, bool) {
 	switch typez {
 	case api.INT64_TYPE,
 		api.SINT64_TYPE,
@@ -902,7 +902,10 @@ func encoder(typez api.Typez, name string) (string, bool) {
 		api.UINT64_TYPE:
 		// All 64-bit integer types are encoded as strings. In Dart, these may be
 		// represented as `int` or `BigInt`.
-		return fmt.Sprintf("%s.toString()", name), true
+		if implicitPresence {
+			return fmt.Sprintf("%s.toString()", name), true
+		}
+		return fmt.Sprintf("%s?.toString()", name), true
 	case api.FLOAT_TYPE,
 		api.DOUBLE_TYPE:
 		// A special encoder is needed to handle NaN and Infinity.
@@ -921,7 +924,10 @@ func encoder(typez api.Typez, name string) (string, bool) {
 	case api.BYTES_TYPE:
 		return fmt.Sprintf("encodeBytes(%s)", name), true
 	case api.MESSAGE_TYPE, api.ENUM_TYPE:
-		return fmt.Sprintf("%s.toJson()", name), true
+		if implicitPresence {
+			return fmt.Sprintf("%s.toJson()", name), true
+		}
+		return fmt.Sprintf("%s?.toJson()", name), true
 	default:
 		panic(fmt.Sprintf("unsupported type: %d", typez))
 	}
@@ -1004,15 +1010,15 @@ func (annotate *annotateModel) createFromJsonLine(field *api.Field, state *api.A
 	return fmt.Sprintf("switch (%s) { null => %s, Object $1 => %s($1)}", data, defaultValue, decoder)
 }
 
-func createToJsonLine(field *api.Field, state *api.APIState) string {
+func createToJsonLine(field *api.Field, state *api.APIState, implicitPresence bool) string {
 	name := fieldName(field)
 
 	switch {
 	case field.Repeated:
-		if encoder, encodingRequired := encoder(field.Typez, "i"); encodingRequired {
+		if enc, encodingRequired := encoder(field.Typez, "i", false); encodingRequired {
 			return fmt.Sprintf(
 				"[for (final i in %s) %s]",
-				name, encoder)
+				name, enc)
 		}
 		return name
 	case field.Map:
@@ -1020,7 +1026,7 @@ func createToJsonLine(field *api.Field, state *api.APIState) string {
 		keyType := message.Fields[0].Typez
 		keyEncoder, keyEncodingRequired := keyEncoder(keyType, "e.key")
 		valueType := message.Fields[1].Typez
-		valueEncoder, valueEncodingRequired := encoder(valueType, "e.value")
+		valueEncoder, valueEncodingRequired := encoder(valueType, "e.value", false)
 
 		if keyEncodingRequired || valueEncodingRequired {
 			return fmt.Sprintf(
@@ -1030,7 +1036,7 @@ func createToJsonLine(field *api.Field, state *api.APIState) string {
 		return name
 	}
 
-	enc, _ := encoder(field.Typez, name)
+	enc, _ := encoder(field.Typez, name, implicitPresence)
 	return enc
 }
 
