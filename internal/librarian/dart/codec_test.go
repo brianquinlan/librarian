@@ -281,6 +281,15 @@ func TestBuildCodec(t *testing.T) {
 			},
 			want: map[string]string{},
 		},
+		{
+			name: "package name override",
+			library: &config.Library{
+				Name: "google_cloud_secretmanager_v1",
+			},
+			want: map[string]string{
+				"package-name-override": "google_cloud_secretmanager_v1",
+			},
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			got := buildCodec(test.library)
@@ -564,6 +573,58 @@ func TestToModelConfig(t *testing.T) {
 				Codec: map[string]string{},
 				Override: api.ModelOverride{
 					SkippedIDs: []string{".google.cloud.secretmanager.v1.Secret.name"},
+				},
+			},
+		},
+		{
+			name: "protobuf with library name",
+			library: &config.Library{
+				Name: "google_cloud_functions_v2",
+			},
+			channel: &config.API{
+				Path: "google/cloud/functions/v2",
+			},
+			googleapisDir: googleapisDir,
+			want: &parser.ModelConfig{
+				SpecificationFormat: config.SpecProtobuf,
+				SpecificationSource: "google/cloud/functions/v2",
+				Source: &sources.SourceConfig{
+					Sources: &sources.Sources{
+						Googleapis: googleapisDir,
+					},
+					ActiveRoots: []string{"googleapis"},
+				},
+				Codec: map[string]string{
+					"package-name-override": "google_cloud_functions_v2",
+				},
+				Override: api.ModelOverride{},
+			},
+		},
+		{
+			name: "discovery specification format",
+			library: &config.Library{
+				Name:                "google_cloud_dns_v1",
+				SpecificationFormat: config.SpecDiscovery,
+				Roots:               []string{"discovery", "googleapis"},
+			},
+			channel: &config.API{
+				Path: "google/cloud/dns/v1",
+			},
+			googleapisDir: googleapisDir,
+			want: &parser.ModelConfig{
+				SpecificationFormat: config.SpecDiscovery,
+				SpecificationSource: "discoveries/dns.v1.json",
+				Source: &sources.SourceConfig{
+					Sources: &sources.Sources{
+						Googleapis: googleapisDir,
+					},
+					ActiveRoots: []string{"discovery", "googleapis"},
+				},
+				Codec: map[string]string{
+					"package-name-override": "google_cloud_dns_v1",
+				},
+				Override: api.ModelOverride{
+					Title: "Cloud DNS",
 				},
 			},
 		},

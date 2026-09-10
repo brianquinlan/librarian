@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 
 	"github.com/googleapis/librarian/internal/config"
 	"github.com/googleapis/librarian/internal/serviceconfig"
@@ -26,10 +27,14 @@ import (
 	"github.com/googleapis/librarian/internal/sources"
 )
 
-var errInvalidSpecificationFormat = errors.New("dart generation requires protobuf specification format")
+var errInvalidSpecificationFormat = errors.New("dart generation requires protobuf or discovery specification format")
 
 func toModelConfig(library *config.Library, ch *config.API, srcs *sources.Sources, pc *config.Protoc) (*parser.ModelConfig, error) {
-	if library.SpecificationFormat != "" && library.SpecificationFormat != config.SpecProtobuf {
+	specFormat := config.SpecProtobuf
+	if library.SpecificationFormat != "" {
+		specFormat = library.SpecificationFormat
+	}
+	if specFormat != config.SpecProtobuf && specFormat != config.SpecDiscovery {
 		return nil, fmt.Errorf("%w, got %q", errInvalidSpecificationFormat, library.SpecificationFormat)
 	}
 
@@ -43,9 +48,24 @@ func toModelConfig(library *config.Library, ch *config.API, srcs *sources.Source
 		root = srcs.Showcase
 		src.ActiveRoots = append(src.ActiveRoots, "showcase")
 	}
+	if specFormat == config.SpecDiscovery && !slices.Contains(src.ActiveRoots, "discovery") {
+		src.ActiveRoots = append(src.ActiveRoots, "discovery")
+	}
 	svcConfig, err := serviceconfig.Find(root, ch.Path, config.LanguageDart)
 	if err != nil {
 		return nil, err
+	}
+
+	var specSource string
+	switch specFormat {
+	case config.SpecDiscovery:
+		if svcConfig.Discovery != "" {
+			specSource = svcConfig.Discovery
+		} else {
+			specSource = ch.Path
+		}
+	default:
+		specSource = ch.Path
 	}
 
 	title := svcConfig.Title
@@ -61,9 +81,9 @@ func toModelConfig(library *config.Library, ch *config.API, srcs *sources.Source
 
 	modelConfig := &parser.ModelConfig{
 		Language:            config.LanguageDart,
-		SpecificationFormat: config.SpecProtobuf,
+		SpecificationFormat: specFormat,
 		ServiceConfig:       svcConfig.ServiceConfig,
-		SpecificationSource: ch.Path,
+		SpecificationSource: specSource,
 		Source:              src,
 		Protoc:              pc,
 		Codec:               buildCodec(library),
@@ -87,6 +107,9 @@ func buildCodec(library *config.Library) map[string]string {
 	}
 	if library.SkipRelease {
 		codec["not-for-publication"] = "true"
+	}
+	if library.Name != "" {
+		codec["package-name-override"] = library.Name
 	}
 	if library.Dart == nil {
 		return codec

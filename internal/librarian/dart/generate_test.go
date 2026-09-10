@@ -150,7 +150,7 @@ func TestGenerateLibrary(t *testing.T) {
 	outDir := t.TempDir()
 
 	library := &config.Library{
-		Name:          "google-cloud-secretmanager-v1",
+		Name:          "google_cloud_secretmanager_v1",
 		Version:       "0.1.0",
 		Output:        outDir,
 		CopyrightYear: "2025",
