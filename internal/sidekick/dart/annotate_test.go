@@ -1712,9 +1712,10 @@ func TestAnnotateEnum(t *testing.T) {
 
 func TestAnnotateField(t *testing.T) {
 	for _, test := range []struct {
-		name      string
-		makeField func(message, mapMessage, empty *api.Message, enumState *api.Enum) *api.Field
-		want      *fieldAnnotation
+		name          string
+		autoPopulated bool
+		makeField     func(message, mapMessage, empty *api.Message, enumState *api.Enum) *api.Field
+		want          *fieldAnnotation
 	}{
 		{
 			name: "implicit presence primitive",
@@ -1902,6 +1903,56 @@ func TestAnnotateField(t *testing.T) {
 				ConstDefault:          true,
 			},
 		},
+		{
+			name:          "auto-populated",
+			autoPopulated: true,
+			makeField: func(_, _, _ *api.Message, _ *api.Enum) *api.Field {
+				return api.NewTestField("request_id").WithType(api.TypezString).WithAutoPopulated()
+			},
+			want: &fieldAnnotation{
+				Name:                  "requestId",
+				Type:                  "String",
+				DocLines:              []string{},
+				Required:              true,
+				Nullable:              false,
+				FieldBehaviorRequired: false,
+				DefaultValue:          "uuid4()",
+				ConstDefault:          false,
+			},
+		},
+		{
+			name:          "auto-populated optional",
+			autoPopulated: true,
+			makeField: func(_, _, _ *api.Message, _ *api.Enum) *api.Field {
+				return api.NewTestField("request_id").WithType(api.TypezString).WithOptional().WithAutoPopulated()
+			},
+			want: &fieldAnnotation{
+				Name:                  "requestId",
+				Type:                  "String",
+				DocLines:              []string{},
+				Required:              true,
+				Nullable:              false,
+				FieldBehaviorRequired: false,
+				DefaultValue:          "uuid4()",
+				ConstDefault:          false,
+			},
+		},
+		{
+			name: "auto-populated eligible but not configured on method",
+			makeField: func(_, _, _ *api.Message, _ *api.Enum) *api.Field {
+				return api.NewTestField("request_id").WithType(api.TypezString).WithAutoPopulated()
+			},
+			want: &fieldAnnotation{
+				Name:                  "requestId",
+				Type:                  "String",
+				DocLines:              []string{},
+				Required:              true,
+				Nullable:              false,
+				FieldBehaviorRequired: false,
+				DefaultValue:          "''",
+				ConstDefault:          true,
+			},
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			enumState := api.NewTestEnum("State")
@@ -1910,7 +1961,12 @@ func TestAnnotateField(t *testing.T) {
 			mapMessage := api.NewTestMapMessage("MapMessage", api.TypezString, api.TypezInt32)
 			field := test.makeField(message, mapMessage, empty, enumState)
 
-			model := api.NewTestAPI([]*api.Message{message, mapMessage, empty}, []*api.Enum{enumState}, nil)
+			var services []*api.Service
+			if test.autoPopulated {
+				method := api.NewTestMethod("Method").WithAutoPopulated(field)
+				services = []*api.Service{api.NewTestService("Service").WithMethods(method)}
+			}
+			model := api.NewTestAPI([]*api.Message{message, mapMessage, empty}, []*api.Enum{enumState}, services)
 			annotate := newAnnotateModel(model)
 			registerMissingWkt(annotate.model)
 

@@ -887,6 +887,7 @@ func (annotate *annotateModel) annotateField(field *api.Field) {
 	//
 	// See also https://protobuf.dev/programming-guides/field_presence/.
 
+	autoPopulated := annotate.isAutoPopulated(field)
 	var implicitPresence bool
 
 	if field.Repeated || field.Map {
@@ -900,7 +901,7 @@ func (annotate *annotateModel) annotateField(field *api.Field) {
 			// If this field is part of a oneof, it may or may not have a value; we
 			// translate that as nullable (explicit presence).
 			implicitPresence = false
-		} else if field.Optional {
+		} else if field.Optional && !autoPopulated {
 			// The optional keyword makes the field have explicit presence (nullable).
 			implicitPresence = false
 		} else {
@@ -915,6 +916,9 @@ func (annotate *annotateModel) annotateField(field *api.Field) {
 	fieldRequired := slices.Contains(field.Behavior, api.FieldBehaviorRequired)
 	if implicitPresence && !fieldRequired {
 		switch {
+		case autoPopulated:
+			defaultValue = "uuid4()"
+			constDefault = false
 		case field.Repeated:
 			defaultValue = "const []"
 		case field.Map:
@@ -947,6 +951,23 @@ func (annotate *annotateModel) annotateField(field *api.Field) {
 		ToJson:                toJson,
 		ConstDefault:          constDefault,
 	}
+}
+
+// isAutoPopulated reports whether field is configured for auto-population on
+// any method per AIP-4235. field.AutoPopulated alone only indicates that the
+// field's type and annotations make it eligible.
+func (annotate *annotateModel) isAutoPopulated(field *api.Field) bool {
+	if !field.AutoPopulated {
+		return false
+	}
+	for _, s := range annotate.model.Services {
+		for _, m := range s.Methods {
+			if slices.Contains(m.AutoPopulated, field) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (annotate *annotateModel) decoder(typez api.Typez, typeid string) string {

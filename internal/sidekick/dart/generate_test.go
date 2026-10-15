@@ -227,6 +227,55 @@ func TestValidateTemplates(t *testing.T) {
 	}
 }
 
+func TestGenerate_AutoPopulated(t *testing.T) {
+	outDir := t.TempDir()
+	reqIDField := api.NewTestField("request_id").WithType(api.TypezString).WithAutoPopulated()
+	optReqIDField := api.NewTestField("other_request_id").WithType(api.TypezString).WithOptional().WithAutoPopulated()
+	inputMsg := api.NewTestMessage("CreateFooRequest").
+		WithPackage("test").
+		WithFields(reqIDField, optReqIDField)
+	outputMsg := api.NewTestMessage("Foo").WithPackage("test")
+	method := api.NewTestMethod("CreateFoo").
+		WithInput(inputMsg).
+		WithOutput(outputMsg).
+		WithVerb("POST").
+		WithPathTemplate((&api.PathTemplate{}).WithLiteral("v1").WithLiteral("foos")).
+		WithAutoPopulated(reqIDField, optReqIDField)
+	service := api.NewTestService("FooService").
+		WithPackage("test").
+		WithDefaultHost("test.googleapis.com").
+		WithMethods(method)
+	model := api.NewTestAPI([]*api.Message{inputMsg, outputMsg}, nil, []*api.Service{service}).
+		WithPackageName("test")
+	if err := api.CrossReference(model); err != nil {
+		t.Fatal(err)
+	}
+
+	options := maps.Clone(requiredConfig)
+	options["skip-format"] = "true"
+	if err := Generate(t.Context(), model, outDir, options); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(outDir, "lib/src/api.g.dart"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(got)
+	for _, want := range []string{
+		"final String requestId;",
+		"final String otherRequestId;",
+		"String? requestId,",
+		"String? otherRequestId,",
+		"requestId = requestId ?? uuid4(),",
+		"otherRequestId = otherRequestId ?? uuid4(),",
+	} {
+		if !strings.Contains(content, want) {
+			t.Errorf("generated api.g.dart missing %q:\n%s", want, content)
+		}
+	}
+}
+
 func requireProtoc(t *testing.T) {
 	t.Helper()
 	if _, err := exec.LookPath("protoc"); err != nil {
