@@ -18,11 +18,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 
 	"github.com/googleapis/librarian/internal/command"
-	"github.com/googleapis/librarian/internal/git"
 )
 
 var (
@@ -38,13 +38,16 @@ type SplitParams struct {
 	Origin string
 	// RootFiles is the list of root files to preserve across every commit.
 	RootFiles []string
+	// RootEntries contains pre-fetched tree entries for root files. If non-nil, getRootEntries is skipped.
+	RootEntries []string
 	// GitExe is the path to the git binary (default: command.Git).
 	GitExe string
 }
 
 // Split splits a subdirectory from the repository into a standalone commit history,
 // placing the subtree contents at the root and preserving specified root files on every commit.
-// It returns the resulting 40-character commit hash.
+// It tracks history across directory renames (such as packages/ to pkgs/) and returns
+// the resulting 40-character commit hash.
 func Split(ctx context.Context, params SplitParams) (string, error) {
 	gitExe := params.GitExe
 	if gitExe == "" {
@@ -59,63 +62,130 @@ func Split(ctx context.Context, params SplitParams) (string, error) {
 		return "", errors.New("target directory cannot be empty")
 	}
 
-	rawSHA, err := git.SubtreeSplit(ctx, gitExe, targetDir, origin)
-	if err != nil {
-		return "", err
+	dirs := discoverPackageDirs(ctx, gitExe, origin, targetDir)
+	if len(dirs) == 0 {
+		return "", fmt.Errorf("invalid target directory: %s", targetDir)
 	}
 
 	rootFiles := params.RootFiles
 	if rootFiles == nil {
 		rootFiles = DefaultRootFiles
 	}
-	if len(rootFiles) == 0 {
-		return rawSHA, nil
+	rootEntries := params.RootEntries
+	if rootEntries == nil && len(rootFiles) > 0 {
+		var err error
+		rootEntries, err = getRootEntries(ctx, gitExe, origin, rootFiles)
+		if err != nil {
+			return "", err
+		}
 	}
 
-	return rewriteHistoryWithRootFiles(ctx, gitExe, rawSHA, origin, rootFiles)
+	return splitDirs(ctx, gitExe, origin, dirs, rootFiles, rootEntries)
 }
 
-func rewriteHistoryWithRootFiles(ctx context.Context, gitExe, rawSHA, origin string, rootFiles []string) (string, error) {
-	rootEntries, err := getRootEntries(ctx, gitExe, origin, rootFiles)
-	if err != nil {
-		return "", err
-	}
-	if len(rootEntries) == 0 {
-		return rawSHA, nil
-	}
-
-	revOutput, err := command.Output(ctx, gitExe, "rev-list", "--reverse", "--topo-order", rawSHA)
-	if err != nil {
-		return "", fmt.Errorf("failed to get commit list for %s: %w", rawSHA, err)
-	}
-	commits := strings.Fields(revOutput)
-	if len(commits) == 0 {
-		return rawSHA, nil
-	}
-
-	commitMap := make(map[string]string, len(commits))
-	lastNewCommit := rawSHA
-
-	for _, c := range commits {
-		treeOut, err := command.Output(ctx, gitExe, "ls-tree", c)
-		if err != nil {
-			return "", fmt.Errorf("failed to ls-tree for %s: %w", c, err)
+func discoverPackageDirs(ctx context.Context, gitExe, origin, targetDir string) []string {
+	var dirs []string
+	addDir := func(d string) {
+		d = strings.Trim(filepath.ToSlash(d), "/")
+		if d == "" || d == "." {
+			return
 		}
+		if !slices.Contains(dirs, d) {
+			dirs = append(dirs, d)
+		}
+	}
 
-		var currentEntries []string
-		for line := range strings.SplitSeq(treeOut, "\n") {
+	addDir(targetDir)
+	if after, ok := strings.CutPrefix(targetDir, "pkgs/"); ok {
+		addDir("packages/" + after)
+	} else if after, ok := strings.CutPrefix(targetDir, "packages/"); ok {
+		addDir("pkgs/" + after)
+	}
+
+	pkgSwift := filepath.ToSlash(filepath.Join(targetDir, "Package.swift"))
+	out, err := command.Output(ctx, gitExe, "-c", "gc.auto=0", "log", "--follow", "--name-status", "--pretty=format:", origin, "--", pkgSwift)
+	if err == nil {
+		for line := range strings.SplitSeq(out, "\n") {
 			line = strings.TrimSpace(line)
 			if line == "" {
 				continue
 			}
-			parts := strings.Split(line, "\t")
+			fields := strings.Split(line, "\t")
+			if len(fields) < 2 {
+				continue
+			}
+			status := fields[0]
+			switch {
+			case strings.HasPrefix(status, "R") && len(fields) >= 3:
+				addDir(filepath.Dir(fields[2]))
+				addDir(filepath.Dir(fields[1]))
+			case strings.HasPrefix(status, "C") && len(fields) >= 3:
+				addDir(filepath.Dir(fields[2]))
+				return dirs
+			default:
+				addDir(filepath.Dir(fields[1]))
+			}
+		}
+	}
+	return dirs
+}
+
+func splitDirs(ctx context.Context, gitExe, origin string, dirs, rootFiles, rootEntries []string) (string, error) {
+	revArgs := []string{"-c", "gc.auto=0", "rev-list", "--parents", "--reverse", "--topo-order", origin, "--"}
+	revArgs = append(revArgs, dirs...)
+	revOutput, err := command.Output(ctx, gitExe, revArgs...)
+	if err != nil {
+		return "", fmt.Errorf("failed to get commit list for %v: %w", dirs, err)
+	}
+
+	commitMap := make(map[string]string)
+	commitTree := make(map[string]string)
+	var lastNewCommit string
+
+	for line := range strings.SplitSeq(revOutput, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		fields := strings.Fields(line)
+		c := fields[0]
+		parents := fields[1:]
+
+		var treeOut string
+		for _, d := range dirs {
+			out, err := command.Output(ctx, gitExe, "-c", "gc.auto=0", "ls-tree", fmt.Sprintf("%s:%s", c, d))
+			if err == nil && strings.TrimSpace(out) != "" {
+				treeOut = out
+				break
+			}
+			if ctx.Err() != nil {
+				return "", ctx.Err()
+			}
+		}
+		if treeOut == "" {
+			for _, p := range parents {
+				if mapped, ok := commitMap[p]; ok {
+					commitMap[c] = mapped
+					break
+				}
+			}
+			continue
+		}
+
+		var currentEntries []string
+		for entry := range strings.SplitSeq(treeOut, "\n") {
+			entry = strings.TrimSpace(entry)
+			if entry == "" {
+				continue
+			}
+			parts := strings.Split(entry, "\t")
 			if len(parts) >= 2 {
 				filename := parts[len(parts)-1]
 				if slices.Contains(rootFiles, filename) {
 					continue
 				}
 			}
-			currentEntries = append(currentEntries, line)
+			currentEntries = append(currentEntries, entry)
 		}
 
 		// Git tree objects require entries to be sorted alphabetically, with tree
@@ -128,38 +198,40 @@ func rewriteHistoryWithRootFiles(ctx context.Context, gitExe, rawSHA, origin str
 				return strings.Compare(a, b)
 			}
 			nameA, nameB := partsA[1], partsB[1]
-			isTreeA := strings.Contains(partsA[0], " tree ")
-			isTreeB := strings.Contains(partsB[0], " tree ")
-			if isTreeA {
+			if strings.Contains(partsA[0], " tree ") {
 				nameA += "/"
 			}
-			if isTreeB {
+			if strings.Contains(partsB[0], " tree ") {
 				nameB += "/"
 			}
 			return strings.Compare(nameA, nameB)
 		})
 		mktreeInput := strings.Join(combined, "\n") + "\n"
 
-		newTree, err := command.OutputWithStdin(ctx, strings.NewReader(mktreeInput), gitExe, "mktree")
+		newTree, err := command.OutputWithStdin(ctx, strings.NewReader(mktreeInput), gitExe, "-c", "gc.auto=0", "mktree")
 		if err != nil {
 			return "", fmt.Errorf("git mktree failed for %s: %w", c, err)
 		}
 		newTree = strings.TrimSpace(newTree)
 
-		parentsOut, err := command.Output(ctx, gitExe, "log", "-n", "1", "--pretty=%P", c)
-		if err != nil {
-			return "", fmt.Errorf("failed to get parents for %s: %w", c, err)
-		}
-		var parentArgs []string
-		for p := range strings.FieldsSeq(parentsOut) {
-			mappedP := p
-			if mapped, ok := commitMap[p]; ok {
-				mappedP = mapped
+		var mappedParents []string
+		for _, p := range parents {
+			if mapped, ok := commitMap[p]; ok && !slices.Contains(mappedParents, mapped) {
+				mappedParents = append(mappedParents, mapped)
 			}
-			parentArgs = append(parentArgs, "-p", mappedP)
 		}
 
-		metaOut, err := command.Output(ctx, gitExe, "log", "-n", "1", "--pretty=format:%an%x00%ae%x00%ad%x00%cn%x00%ce%x00%cd%x00%B", c)
+		if len(mappedParents) == 1 && commitTree[mappedParents[0]] == newTree {
+			commitMap[c] = mappedParents[0]
+			continue
+		}
+
+		var parentArgs []string
+		for _, mp := range mappedParents {
+			parentArgs = append(parentArgs, "-p", mp)
+		}
+
+		metaOut, err := command.Output(ctx, gitExe, "-c", "gc.auto=0", "log", "-n", "1", "--pretty=format:%an%x00%ae%x00%ad%x00%cn%x00%ce%x00%cd%x00%B", c)
 		if err != nil {
 			return "", err
 		}
@@ -179,7 +251,7 @@ func rewriteHistoryWithRootFiles(ctx context.Context, gitExe, rawSHA, origin str
 			"GIT_COMMITTER_EMAIL": committerEmail,
 			"GIT_COMMITTER_DATE":  committerDate,
 		}
-		args := []string{"-c", "commit.gpgsign=false", "commit-tree", newTree}
+		args := []string{"-c", "gc.auto=0", "-c", "commit.gpgsign=false", "commit-tree", newTree}
 		args = append(args, parentArgs...)
 
 		newCommit, err := command.OutputWithStdinAndEnv(ctx, strings.NewReader(commitMsg), env, gitExe, args...)
@@ -188,16 +260,20 @@ func rewriteHistoryWithRootFiles(ctx context.Context, gitExe, rawSHA, origin str
 		}
 		newCommit = strings.TrimSpace(newCommit)
 		commitMap[c] = newCommit
+		commitTree[newCommit] = newTree
 		lastNewCommit = newCommit
 	}
 
+	if lastNewCommit == "" {
+		return "", fmt.Errorf("no commits found for directory %s", dirs[0])
+	}
 	return lastNewCommit, nil
 }
 
 func getRootEntries(ctx context.Context, gitExe, origin string, rootFiles []string) ([]string, error) {
 	var entries []string
 	for _, f := range rootFiles {
-		out, err := command.Output(ctx, gitExe, "ls-tree", origin, "--", f)
+		out, err := command.Output(ctx, gitExe, "-c", "gc.auto=0", "ls-tree", origin, "--", f)
 		if err != nil {
 			return nil, fmt.Errorf("failed to ls-tree for %s at %s: %w", f, origin, err)
 		}

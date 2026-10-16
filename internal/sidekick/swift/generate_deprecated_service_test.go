@@ -35,27 +35,22 @@ func TestGenerateService_Deprecated(t *testing.T) {
 			name:         "deprecated",
 			deprecated:   true,
 			wantClient:   "/// @Snippet(path: \"DeprecatedServiceQuickstart\")\n@available(*, deprecated)\npublic final class DeprecatedServiceClient: ",
-			wantProtocol: "/// and pass a mock implementation in your tests.\n  @available(*, deprecated)\n  public protocol DeprecatedServiceProtocol ",
+			wantProtocol: "/// and pass a mock implementation in your tests.\n  @available(*, deprecated)\n  public protocol DeprecatedServiceProtocol: ",
 		},
 		{
 			name:         "not-deprecated",
 			deprecated:   false,
 			wantClient:   "/// @Snippet(path: \"DeprecatedServiceQuickstart\")\npublic final class DeprecatedServiceClient: ",
-			wantProtocol: "/// and pass a mock implementation in your tests.\n  public protocol DeprecatedServiceProtocol ",
+			wantProtocol: "/// and pass a mock implementation in your tests.\n  public protocol DeprecatedServiceProtocol: ",
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			outDir := t.TempDir()
 
-			service := &api.Service{
-				Name:       "DeprecatedService",
-				Package:    "test",
-				ID:         ".test.DeprecatedService",
-				Deprecated: test.deprecated,
-			}
+			service := api.NewTestService("DeprecatedService").
+				WithDeprecated(test.deprecated)
 
 			model := api.NewTestAPI(nil, nil, []*api.Service{service})
-			model.PackageName = "test"
 			library := &config.Library{
 				Swift: swiftConfig(t, nil),
 			}
@@ -74,7 +69,7 @@ func TestGenerateService_Deprecated(t *testing.T) {
 			if diff := cmp.Diff(test.wantClient, got); diff != "" {
 				t.Errorf("mismatch (-want +got):\n%s", diff)
 			}
-			got = extractBlock(t, contentStr, `/// and pass a mock implementation in your tests.`, "public protocol DeprecatedServiceProtocol ")
+			got = extractBlock(t, contentStr, `/// and pass a mock implementation in your tests.`, "public protocol DeprecatedServiceProtocol: ")
 			if diff := cmp.Diff(test.wantProtocol, got); diff != "" {
 				t.Errorf("mismatch (-want +got):\n%s", diff)
 			}

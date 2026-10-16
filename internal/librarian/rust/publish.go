@@ -135,11 +135,20 @@ func publishCrates(ctx context.Context, params PublishParams, lastTag string, fi
 			return err
 		}
 	}
-	args := []string{"workspaces", "publish", "--skip-published", "--publish-interval=60", "--no-git-commit", "--from-git", "skip"}
-	if params.DryRunKeepGoing {
-		args = append(args, "--dry-run", "--keep-going")
-	} else if params.DryRun {
-		args = append(args, "--dry-run")
+	if len(plannedCrates) == 0 {
+		return nil
+	}
+	var args []string
+	if params.DryRun || params.DryRunKeepGoing {
+		args = []string{"publish", "--dry-run"}
+		if params.DryRunKeepGoing {
+			args = append(args, "--keep-going")
+		}
+		for _, crate := range plannedCrates {
+			args = append(args, "-p", crate)
+		}
+	} else {
+		args = []string{"workspaces", "publish", "--skip-published", "--publish-interval=60", "--no-git-commit", "--from-git", "skip"}
 	}
 	if params.Verbose {
 		return command.RunStreaming(ctx, command.Cargo, args...)
@@ -150,10 +159,10 @@ func publishCrates(ctx context.Context, params PublishParams, lastTag string, fi
 // runSemverChecks iterates through manifests and runs semver checks for each.
 func runSemverChecks(ctx context.Context, semverData semverData) error {
 	group, ctx := errgroup.WithContext(ctx)
-	group.SetLimit(max(runtime.NumCPU()/semverCheckCPUDivisor, 1))
-	for name := range semverData.manifests {
+	group.SetLimit(max(runtime.GOMAXPROCS(0)/semverCheckCPUDivisor, 1))
+	for name, manifest := range semverData.manifests {
 		group.Go(func() error {
-			if err := semverCheck(ctx, semverData, name); err != nil {
+			if err := semverCheck(ctx, semverData, name, manifest); err != nil {
 				return fmt.Errorf("%s: %w: %v", name, errSemverCheck, err)
 			}
 			return nil
@@ -163,8 +172,17 @@ func runSemverChecks(ctx context.Context, semverData semverData) error {
 }
 
 // semverCheck runs semver checks for a specific crate.
-func semverCheck(ctx context.Context, semverData semverData, name string) error {
-	err := command.Run(ctx, command.Cargo, "info", name, "--registry", "crates-io")
+func semverCheck(ctx context.Context, semverData semverData, name, manifest string) error {
+	procMacro, err := isProcMacro(manifest)
+	if err != nil {
+		return err
+	}
+	if procMacro {
+		// Procedural macro crates do not export a standard library API surface
+		// that cargo-semver-checks can inspect.
+		return nil
+	}
+	err = command.Run(ctx, command.Cargo, "info", name, "--registry", "crates-io")
 	if err != nil {
 		if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 			if exitErr.ExitCode() == 101 && strings.Contains(err.Error(), "could not find") {

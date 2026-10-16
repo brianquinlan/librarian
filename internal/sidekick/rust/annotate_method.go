@@ -47,9 +47,11 @@ type methodAnnotation struct {
 	IsLroPoller               bool
 	IsDiscoveryLro            bool
 	IsBigQueryInsertJob       bool
+	ExtensibleBuilder         bool
 	ClientSideStreaming       bool
 	ServerSideStreaming       bool
 	IsGrpc                    bool
+	GenerateRpcSamples        bool
 	HasIdempotencyHook        bool
 	IdempotencyHook           string
 }
@@ -339,6 +341,9 @@ func (c *codec) annotateMethod(m *api.Method) (*methodAnnotation, error) {
 	if err != nil {
 		return nil, err
 	}
+	hasVeneer := c.serviceHasVeneer(m.Service.ID)
+	internalBuilders := c.serviceInternalBuilders(m.Service.ID)
+	generateRpcSamples := c.serviceGenerateRpcSamples(m.Service.ID)
 	annotation := &methodAnnotation{
 		Name:                      toSnake(m.Name),
 		NameNoMangling:            toSnakeNoMangling(m.Name),
@@ -351,13 +356,15 @@ func (c *codec) annotateMethod(m *api.Method) (*methodAnnotation, error) {
 		ServiceNameToSnake:        toSnake(serviceName),
 		SystemParameters:          systemParameters,
 		ReturnType:                returnType,
-		HasVeneer:                 c.hasVeneer,
+		HasVeneer:                 hasVeneer,
 		RoutingRequired:           c.routingRequired,
 		DetailedTracingAttributes: c.detailedTracingAttributes,
-		InternalBuilders:          c.internalBuilders,
+		InternalBuilders:          internalBuilders,
+		GenerateRpcSamples:        generateRpcSamples,
 		IsLroPoller:               m.IsLroPoller,
 		IsDiscoveryLro:            isDiscoveryLro(m),
-		IsBigQueryInsertJob:       m.ID == ".google.cloud.bigquery.v2.JobService.InsertJob",
+		IsBigQueryInsertJob:       m.ID == ".google.cloud.bigquery.v2.JobService.InsertJob" && !slices.Contains(c.extensibleBuilders, m.ID),
+		ExtensibleBuilder:         slices.Contains(c.extensibleBuilders, m.ID),
 		ClientSideStreaming:       m.ClientSideStreaming,
 		ServerSideStreaming:       m.ServerSideStreaming,
 		IsGrpc:                    c.methodUsesGrpc(m),
@@ -771,10 +778,6 @@ func (c *codec) methodUsesGrpc(m *api.Method) bool {
 	if c.defaultTransport == "grpc" {
 		return true
 	}
-	if m.ClientSideStreaming || m.ServerSideStreaming {
-		return (m.ClientSideStreaming && m.ServerSideStreaming && c.includeBidiStreamingMethods) ||
-			(!m.ClientSideStreaming && m.ServerSideStreaming && c.includeServerStreamingMethods) ||
-			c.includeStreamingMethods
-	}
-	return false
+	// Client side only streaming is not yet supported, only include if specifically enabled.
+	return m.ServerSideStreaming || c.includeStreamingMethods
 }

@@ -42,25 +42,21 @@ func extractBlock(t *testing.T, content, startStr, endStr string) string {
 func TestGenerateBidiStreaming(t *testing.T) {
 	outDir := t.TempDir()
 
-	request := api.NewTestMessage("Request").WithPackage("test.v1")
-	request.Fields = []*api.Field{
-		{
-			Name:     "query",
-			JSONName: "query",
-			ID:       ".test.v1.Request.query",
-			Typez:    api.TypezString,
-		},
-	}
+	request := api.NewTestMessage("Request").
+		WithPackage("test.v1").
+		WithFields(api.NewTestField("query").WithType(api.TypezString))
 	response := api.NewTestMessage("Response").WithPackage("test.v1")
 
-	bidiMethod := api.NewTestMethod("Chat").WithInput(request).WithOutput(response).WithBidiStreaming()
-	bidiMethod.PathInfo = &api.PathInfo{
-		Bindings: []*api.PathBinding{{Verb: "GET", PathTemplate: &api.PathTemplate{}}},
-	}
+	bidiMethod := api.NewTestMethod("Chat").
+		WithInput(request).
+		WithOutput(response).
+		WithBidiStreaming().
+		WithVerb("GET").
+		WithPathTemplate(&api.PathTemplate{})
 	service := api.NewTestService("Protocol").WithPackage("test.v1").WithMethods(bidiMethod)
 
-	model := api.NewTestAPI([]*api.Message{request, response}, []*api.Enum{}, []*api.Service{service})
-	model.PackageName = "test.v1"
+	model := api.NewTestAPI([]*api.Message{request, response}, nil, []*api.Service{service}).
+		WithPackageName("test.v1")
 	if err := api.CrossReference(model); err != nil {
 		t.Fatal(err)
 	}
@@ -68,12 +64,11 @@ func TestGenerateBidiStreaming(t *testing.T) {
 	cfg := &parser.ModelConfig{
 		SpecificationFormat: libconfig.SpecProtobuf,
 		Codec: map[string]string{
-			"package:wkt":                    "source=google.protobuf,package=google-cloud-wkt",
-			"package:prost":                  "package=prost,used-if=streaming",
-			"package:prost-types":            "package=prost-types,used-if=streaming",
-			"include-bidi-streaming-methods": "true",
-			"generate-rpc-samples":           "true",
-			"detailed-tracing-attributes":    "true",
+			"package:wkt":                 "source=google.protobuf,package=google-cloud-wkt",
+			"package:prost":               "package=prost,used-if=streaming",
+			"package:prost-types":         "package=prost-types,used-if=streaming",
+			"generate-rpc-samples":        "true",
+			"detailed-tracing-attributes": "true",
 		},
 	}
 	if err := Generate(t.Context(), model, outDir, cfg); err != nil {
@@ -322,25 +317,21 @@ prost.workspace      = true
 func TestGenerateGrpcClientBidiStreaming(t *testing.T) {
 	outDir := t.TempDir()
 
-	request := api.NewTestMessage("Request").WithPackage("test.v1")
-	request.Fields = []*api.Field{
-		{
-			Name:     "query",
-			JSONName: "query",
-			ID:       ".test.v1.Request.query",
-			Typez:    api.TypezString,
-		},
-	}
+	request := api.NewTestMessage("Request").
+		WithPackage("test.v1").
+		WithFields(api.NewTestField("query").WithType(api.TypezString))
 	response := api.NewTestMessage("Response").WithPackage("test.v1")
 
-	bidiMethod := api.NewTestMethod("Chat").WithInput(request).WithOutput(response).WithBidiStreaming()
-	bidiMethod.PathInfo = &api.PathInfo{
-		Bindings: []*api.PathBinding{{Verb: "GET", PathTemplate: &api.PathTemplate{}}},
-	}
+	bidiMethod := api.NewTestMethod("Chat").
+		WithInput(request).
+		WithOutput(response).
+		WithBidiStreaming().
+		WithVerb("GET").
+		WithPathTemplate(&api.PathTemplate{})
 	service := api.NewTestService("Protocol").WithPackage("test.v1").WithMethods(bidiMethod)
 
-	model := api.NewTestAPI([]*api.Message{request, response}, []*api.Enum{}, []*api.Service{service})
-	model.PackageName = "test.v1"
+	model := api.NewTestAPI([]*api.Message{request, response}, nil, []*api.Service{service}).
+		WithPackageName("test.v1")
 	if err := api.CrossReference(model); err != nil {
 		t.Fatal(err)
 	}
@@ -348,9 +339,8 @@ func TestGenerateGrpcClientBidiStreaming(t *testing.T) {
 	cfg := &parser.ModelConfig{
 		SpecificationFormat: libconfig.SpecProtobuf,
 		Codec: map[string]string{
-			"template-override":              "templates/grpc-client",
-			"package:wkt":                    "source=google.protobuf,package=google-cloud-wkt",
-			"include-bidi-streaming-methods": "true",
+			"template-override": "templates/grpc-client",
+			"package:wkt":       "source=google.protobuf,package=google-cloud-wkt",
 		},
 	}
 	if err := Generate(t.Context(), model, outDir, cfg); err != nil {

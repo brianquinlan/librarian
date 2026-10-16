@@ -135,9 +135,8 @@ func setupSplitRemoteRepo(t *testing.T, tag string) string {
 func TestPublishSuccess(t *testing.T) {
 	testhelper.RequireCommand(t, "git")
 
-	// Create remote split repos for two libraries: auth and storage
+	// Create remote split repos for two libraries: auth (already tagged) and storage (empty bare repo)
 	authRemote := setupSplitRemoteRepo(t, "1.0.0")
-	storageRemote := setupSplitRemoteRepo(t, "")
 
 	// Set up monorepo
 	monorepoRemote := setupMonorepoWithRootFiles(t)
@@ -146,10 +145,6 @@ func TestPublishSuccess(t *testing.T) {
 	testhelper.RunGit(t, "clone", monorepoRemote, ".")
 	testhelper.RunGit(t, "remote", "rename", "origin", config.RemoteUpstream)
 	testhelper.ConfigNewGitRepository(t)
-	remotesMap := map[string]string{
-		"swift-auth":    authRemote,
-		"swift-storage": storageRemote,
-	}
 
 	cfg := &config.Config{
 		Language: config.LanguageSwift,
@@ -179,14 +174,11 @@ func TestPublishSuccess(t *testing.T) {
 		},
 	}
 
-	// Publish with dynamic remote format using template
-	// We can use a custom remote URL format using local paths:
-	// For testing, we point FormatRemoteURL to remotesMap entries
 	tempDir := t.TempDir()
-	for name, remotePath := range remotesMap {
-		linkPath := filepath.Join(tempDir, name+".git")
-		testhelper.RunGit(t, "clone", "--bare", remotePath, linkPath)
-	}
+	authBareRepo := filepath.Join(tempDir, "swift-auth.git")
+	testhelper.RunGit(t, "clone", "--bare", authRemote, authBareRepo)
+	storageBareRepo := filepath.Join(tempDir, "swift-storage.git")
+	testhelper.RunGit(t, "init", "--bare", storageBareRepo)
 
 	err := Publish(t.Context(), PublishParams{
 		Config:          cfg,
@@ -199,7 +191,66 @@ func TestPublishSuccess(t *testing.T) {
 	}
 
 	// Verify that storage remote now has tag 1.1.0
+	hasTag, err := git.RemoteTagExists(t.Context(), command.Git, storageBareRepo, "1.1.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasTag {
+		t.Errorf("tag 1.1.0 was not pushed to storage remote")
+	}
+}
+
+func TestPublishForcePush(t *testing.T) {
+	testhelper.RequireCommand(t, "git")
+
+	// Create a remote repository with an unrelated commit on main so non-force push is rejected
+	storageRemote := setupSplitRemoteRepo(t, "")
+
+	monorepoRemote := setupMonorepoWithRootFiles(t)
+	cloneDir := t.TempDir()
+	t.Chdir(cloneDir)
+	testhelper.RunGit(t, "clone", monorepoRemote, ".")
+	testhelper.RunGit(t, "remote", "rename", "origin", config.RemoteUpstream)
+	testhelper.ConfigNewGitRepository(t)
+
+	cfg := &config.Config{
+		Language: config.LanguageSwift,
+		Repo:     "googleapis/google-cloud-swift",
+		Libraries: []*config.Library{
+			{
+				Name:    "google-cloud-storage",
+				Version: "1.1.0",
+				Output:  "packages/storage",
+			},
+		},
+	}
+
+	tempDir := t.TempDir()
 	storageBareRepo := filepath.Join(tempDir, "swift-storage.git")
+	testhelper.RunGit(t, "clone", "--bare", storageRemote, storageBareRepo)
+
+	// Without Force, pushing diverged history should fail
+	err := Publish(t.Context(), PublishParams{
+		Config:          cfg,
+		RemoteURLFormat: filepath.Join(tempDir, "{name}.git"),
+		Origin:          "HEAD",
+		RemoteBranch:    config.BranchMain,
+	})
+	if err == nil {
+		t.Fatal("expected Publish() without Force to fail on diverged history, got nil")
+	}
+
+	// With Force: true, pushing diverged history should succeed
+	if err := Publish(t.Context(), PublishParams{
+		Config:          cfg,
+		RemoteURLFormat: filepath.Join(tempDir, "{name}.git"),
+		Origin:          "HEAD",
+		RemoteBranch:    config.BranchMain,
+		Force:           true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
 	hasTag, err := git.RemoteTagExists(t.Context(), command.Git, storageBareRepo, "1.1.0")
 	if err != nil {
 		t.Fatal(err)
@@ -308,31 +359,31 @@ func TestMatchLibrary(t *testing.T) {
 		{
 			name:    "match by name",
 			targets: []string{"google-cloud-wkt"},
-			lib:     &config.Library{Name: "google-cloud-wkt", Output: "packages/wkt/Sources/GoogleCloudWkt/generated"},
+			lib:     &config.Library{Name: "google-cloud-wkt", Output: "packages/wkt/Sources/GoogleWKT/generated"},
 			pkgDir:  "packages/wkt",
 			want:    true,
 		},
 		{
 			name:    "match by relative path",
 			targets: []string{"packages/wkt"},
-			lib:     &config.Library{Name: "google-cloud-wkt", Output: "packages/wkt/Sources/GoogleCloudWkt/generated"},
+			lib:     &config.Library{Name: "google-cloud-wkt", Output: "packages/wkt/Sources/GoogleWKT/generated"},
 			pkgDir:  "packages/wkt",
 			want:    true,
 		},
 		{
 			name:    "match by raw output",
-			targets: []string{"packages/wkt/Sources/GoogleCloudWkt/generated"},
-			lib:     &config.Library{Name: "google-cloud-wkt", Output: "packages/wkt/Sources/GoogleCloudWkt/generated"},
+			targets: []string{"packages/wkt/Sources/GoogleWKT/generated"},
+			lib:     &config.Library{Name: "google-cloud-wkt", Output: "packages/wkt/Sources/GoogleWKT/generated"},
 			pkgDir:  "packages/wkt",
 			want:    true,
 		},
 		{
 			name:    "match by swift override name",
-			targets: []string{"GoogleCloudWkt"},
+			targets: []string{"GoogleWKT"},
 			lib: &config.Library{
 				Name:   "google-cloud-wkt",
-				Output: "packages/wkt/Sources/GoogleCloudWkt/generated",
-				Swift:  &config.SwiftPackage{LibraryNameOverride: "GoogleCloudWkt"},
+				Output: "packages/wkt/Sources/GoogleWKT/generated",
+				Swift:  &config.SwiftPackage{LibraryNameOverride: "GoogleWKT"},
 			},
 			pkgDir: "packages/wkt",
 			want:   true,
@@ -340,28 +391,28 @@ func TestMatchLibrary(t *testing.T) {
 		{
 			name:    "match by path with trailing slash",
 			targets: []string{"packages/wkt/"},
-			lib:     &config.Library{Name: "google-cloud-wkt", Output: "packages/wkt/Sources/GoogleCloudWkt/generated"},
+			lib:     &config.Library{Name: "google-cloud-wkt", Output: "packages/wkt/Sources/GoogleWKT/generated"},
 			pkgDir:  "packages/wkt",
 			want:    true,
 		},
 		{
 			name:    "match by path with leading dot-slash",
 			targets: []string{"./packages/wkt"},
-			lib:     &config.Library{Name: "google-cloud-wkt", Output: "packages/wkt/Sources/GoogleCloudWkt/generated"},
+			lib:     &config.Library{Name: "google-cloud-wkt", Output: "packages/wkt/Sources/GoogleWKT/generated"},
 			pkgDir:  "packages/wkt",
 			want:    true,
 		},
 		{
 			name:    "match by base directory name",
 			targets: []string{"wkt"},
-			lib:     &config.Library{Name: "google-cloud-wkt", Output: "packages/wkt/Sources/GoogleCloudWkt/generated"},
+			lib:     &config.Library{Name: "google-cloud-wkt", Output: "packages/wkt/Sources/GoogleWKT/generated"},
 			pkgDir:  "packages/wkt",
 			want:    true,
 		},
 		{
 			name:    "no match",
 			targets: []string{"packages/auth"},
-			lib:     &config.Library{Name: "google-cloud-wkt", Output: "packages/wkt/Sources/GoogleCloudWkt/generated"},
+			lib:     &config.Library{Name: "google-cloud-wkt", Output: "packages/wkt/Sources/GoogleWKT/generated"},
 			pkgDir:  "packages/wkt",
 			want:    false,
 		},
@@ -452,5 +503,151 @@ func TestLibraryOutput(t *testing.T) {
 				t.Errorf("libraryOutput(%+v, %+v) = %q, want %q", test.lib, test.defaults, got, test.want)
 			}
 		})
+	}
+}
+
+func TestPublishTopologicalOrdering(t *testing.T) {
+	testhelper.RequireCommand(t, "git")
+
+	monorepoRemote := setupMonorepoWithRootFiles(t)
+
+	// Make storage depend on auth via localOrRemotePackage in Package.swift before cloning
+	storageManifest := `// swift-tools-version: 6.2
+import PackageDescription
+
+let package = Package(
+  name: "GoogleCloudStorage",
+  dependencies: [
+    localOrRemotePackage(
+      url: "https://github.com/googleapis/swift-auth",
+      path: "packages/auth",
+      from: "1.0.0"
+    )
+  ]
+)
+`
+	if err := os.WriteFile(filepath.Join(monorepoRemote, "packages", "storage", "Package.swift"), []byte(storageManifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	testhelper.RunGit(t, "-C", monorepoRemote, "add", ".")
+	testhelper.RunGit(t, "-C", monorepoRemote, "commit", "-m", "feat: storage depends on auth")
+
+	cloneDir := t.TempDir()
+	t.Chdir(cloneDir)
+	testhelper.RunGit(t, "clone", monorepoRemote, ".")
+	testhelper.RunGit(t, "remote", "rename", "origin", config.RemoteUpstream)
+	testhelper.ConfigNewGitRepository(t)
+
+	tempDir := t.TempDir()
+	authBareRepo := filepath.Join(tempDir, "swift-auth.git")
+	storageBareRepo := filepath.Join(tempDir, "swift-storage.git")
+	testhelper.RunGit(t, "init", "--bare", authBareRepo)
+	testhelper.RunGit(t, "init", "--bare", storageBareRepo)
+
+	cfg := &config.Config{
+		Language: config.LanguageSwift,
+		Repo:     "googleapis/google-cloud-swift",
+		Libraries: []*config.Library{
+			{
+				Name:    "google-cloud-storage",
+				Version: "1.1.0",
+				Output:  "packages/storage",
+			},
+			{
+				Name:    "google-cloud-auth",
+				Version: "1.0.0",
+				Output:  "packages/auth",
+			},
+		},
+	}
+
+	err := Publish(t.Context(), PublishParams{
+		Config:          cfg,
+		RemoteURLFormat: filepath.Join(tempDir, "{name}.git"),
+		Origin:          "HEAD",
+		RemoteBranch:    config.BranchMain,
+		Concurrency:     4,
+	})
+	if err != nil {
+		t.Fatalf("Publish() failed: %v", err)
+	}
+
+	hasAuthTag, err := git.RemoteTagExists(t.Context(), command.Git, authBareRepo, "1.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasAuthTag {
+		t.Errorf("tag 1.0.0 was not pushed to auth remote")
+	}
+
+	hasStorageTag, err := git.RemoteTagExists(t.Context(), command.Git, storageBareRepo, "1.1.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasStorageTag {
+		t.Errorf("tag 1.1.0 was not pushed to storage remote")
+	}
+}
+
+func TestPublishPreFlightAtomicity(t *testing.T) {
+	testhelper.RequireCommand(t, "git")
+
+	monorepoRemote := setupMonorepoWithRootFiles(t)
+	cloneDir := t.TempDir()
+	t.Chdir(cloneDir)
+	testhelper.RunGit(t, "clone", monorepoRemote, ".")
+	testhelper.RunGit(t, "remote", "rename", "origin", config.RemoteUpstream)
+	testhelper.ConfigNewGitRepository(t)
+
+	// Create an empty package directory with Package.swift that has no git history
+	emptyDir := filepath.Join("packages", "empty")
+	if err := os.MkdirAll(emptyDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(emptyDir, "Package.swift"), []byte(`// uncommitted package`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tempDir := t.TempDir()
+	authBareRepo := filepath.Join(tempDir, "swift-auth.git")
+	emptyBareRepo := filepath.Join(tempDir, "swift-empty.git")
+	testhelper.RunGit(t, "init", "--bare", authBareRepo)
+	testhelper.RunGit(t, "init", "--bare", emptyBareRepo)
+
+	cfg := &config.Config{
+		Language: config.LanguageSwift,
+		Repo:     "googleapis/google-cloud-swift",
+		Libraries: []*config.Library{
+			{
+				Name:    "google-cloud-auth",
+				Version: "1.0.0",
+				Output:  "packages/auth",
+			},
+			{
+				Name:    "google-cloud-empty",
+				Version: "1.0.0",
+				Output:  "packages/empty",
+			},
+		},
+	}
+
+	// Publish should fail during Phase 2 (split of packages/empty)
+	err := Publish(t.Context(), PublishParams{
+		Config:          cfg,
+		RemoteURLFormat: filepath.Join(tempDir, "{name}.git"),
+		Origin:          "HEAD",
+		RemoteBranch:    config.BranchMain,
+	})
+	if err == nil {
+		t.Fatal("expected Publish() to fail when a library split fails, got nil")
+	}
+
+	// Verify pre-flight atomicity: auth was NOT pushed because empty failed to split
+	hasAuthTag, err := git.RemoteTagExists(t.Context(), command.Git, authBareRepo, "1.0.0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasAuthTag {
+		t.Errorf("tag 1.0.0 was pushed to auth remote despite split failure in empty library; want no push (pre-flight atomicity violated)")
 	}
 }

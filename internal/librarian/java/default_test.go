@@ -257,6 +257,42 @@ func TestTidy(t *testing.T) {
 			},
 		},
 		{
+			name: "tidy rest and rpc documentation matching sdk.yaml",
+			lib: &config.Library{
+				APIs: []*config.API{
+					{Path: "google/cloud/aiplatform/v1"},
+				},
+				Java: &config.JavaModule{
+					RestDocumentation: "https://cloud.google.com/vertex-ai/docs/reference/rest",
+					RpcDocumentation:  "https://cloud.google.com/vertex-ai/docs/reference/rpc",
+				},
+			},
+			want: &config.Library{
+				APIs: []*config.API{
+					{Path: "google/cloud/aiplatform/v1"},
+				},
+			},
+		},
+		{
+			name: "do not tidy rest and rpc documentation differing from sdk.yaml",
+			lib: &config.Library{
+				APIs: []*config.API{
+					{Path: "google/cloud/aiplatform/v1"},
+				},
+				Java: &config.JavaModule{
+					RestDocumentation: "https://custom.example.com/rest",
+				},
+			},
+			want: &config.Library{
+				APIs: []*config.API{
+					{Path: "google/cloud/aiplatform/v1"},
+				},
+				Java: &config.JavaModule{
+					RestDocumentation: "https://custom.example.com/rest",
+				},
+			},
+		},
+		{
 			name: "do not tidy false flags",
 			lib: &config.Library{
 				APIs: []*config.API{
@@ -465,6 +501,53 @@ func TestTidy(t *testing.T) {
 				Version: "1.2.0",
 				Java: &config.JavaModule{
 					ReleasedVersion: "1.2.0",
+				},
+			},
+		},
+		{
+			name: "tidy redundant issue tracker override matching sdk.yaml",
+			lib: &config.Library{
+				Name: "kms",
+				APIs: []*config.API{
+					{
+						Path: "google/cloud/kms/v1",
+					},
+				},
+				Java: &config.JavaModule{
+					IssueTrackerOverride: "https://issuetracker.google.com/savedsearches/5264932",
+				},
+			},
+			want: &config.Library{
+				Name: "kms",
+				APIs: []*config.API{
+					{
+						Path: "google/cloud/kms/v1",
+					},
+				},
+			},
+		},
+		{
+			name: "do not tidy custom issue tracker override differing from sdk.yaml",
+			lib: &config.Library{
+				Name: "custom",
+				APIs: []*config.API{
+					{
+						Path: "google/cloud/kms/v1",
+					},
+				},
+				Java: &config.JavaModule{
+					IssueTrackerOverride: "https://issuetracker.google.com/custom/tracker",
+				},
+			},
+			want: &config.Library{
+				Name: "custom",
+				APIs: []*config.API{
+					{
+						Path: "google/cloud/kms/v1",
+					},
+				},
+				Java: &config.JavaModule{
+					IssueTrackerOverride: "https://issuetracker.google.com/custom/tracker",
 				},
 			},
 		},

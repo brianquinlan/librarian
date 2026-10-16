@@ -55,6 +55,11 @@ Only Dart, Rust, and Swift are supported.`,
 				Aliases: []string{"v"},
 				Usage:   "streams output of publishing commands executed",
 			},
+			&cli.BoolFlag{
+				Name:    "force",
+				Aliases: []string{"f"},
+				Usage:   "force push to the remote repository",
+			},
 			&cli.StringFlag{
 				Name:  "remote-url-format",
 				Usage: "template for remote repository URLs (e.g. 'git@github.com:googleapis/{name}.git')",
@@ -73,6 +78,12 @@ Only Dart, Rust, and Swift are supported.`,
 				Name:  "upstream",
 				Value: config.RemoteUpstream,
 				Usage: "name of the upstream git remote",
+			},
+			&cli.IntFlag{
+				Name:    "concurrency",
+				Aliases: []string{"j"},
+				Value:   8,
+				Usage:   "concurrency limit for parallel publish operations",
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -132,10 +143,12 @@ func swiftPublish(ctx context.Context, cfg *config.Config, cmd *cli.Command) err
 	skipSemverChecks := cmd.Bool("skip-semver-checks")
 	dryRunKeepGoing := cmd.Bool("dry-run-keep-going")
 	verbose := cmd.Bool("verbose")
+	force := cmd.Bool("force")
 	remoteURLFormat := cmd.String("remote-url-format")
 	origin := cmd.String("origin")
 	remoteBranch := cmd.String("remote-branch")
 	upstream := cmd.String("upstream")
+	concurrency := int(cmd.Int("concurrency"))
 	command.Verbose = verbose
 	setupLogger(verbose)
 	return swift.Publish(ctx, swift.PublishParams{
@@ -145,6 +158,8 @@ func swiftPublish(ctx context.Context, cfg *config.Config, cmd *cli.Command) err
 		DryRunKeepGoing:  dryRunKeepGoing,
 		SkipSemverChecks: skipSemverChecks,
 		Verbose:          verbose,
+		Force:            force,
+		Concurrency:      concurrency,
 		RemoteURLFormat:  remoteURLFormat,
 		Origin:           origin,
 		RemoteBranch:     remoteBranch,

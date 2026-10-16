@@ -133,18 +133,6 @@ func newCodec(specificationFormat string, options map[string]string) (*codec, er
 				return nil, fmt.Errorf("cannot convert `include-streaming-methods` value %q to boolean: %w", definition, err)
 			}
 			codec.includeStreamingMethods = value
-		case key == "include-bidi-streaming-methods":
-			value, err := strconv.ParseBool(definition)
-			if err != nil {
-				return nil, fmt.Errorf("cannot convert `include-bidi-streaming-methods` value %q to boolean: %w", definition, err)
-			}
-			codec.includeBidiStreamingMethods = value
-		case key == "include-server-streaming-methods":
-			value, err := strconv.ParseBool(definition)
-			if err != nil {
-				return nil, fmt.Errorf("cannot convert `include-server-streaming-methods` value %q to boolean: %w", definition, err)
-			}
-			codec.includeServerStreamingMethods = value
 		case key == "per-service-features":
 			value, err := strconv.ParseBool(definition)
 			if err != nil {
@@ -175,6 +163,8 @@ func newCodec(specificationFormat string, options map[string]string) (*codec, er
 			codec.hasVeneer = value
 		case key == "extra-modules":
 			codec.extraModules = splitOption(definition)
+		case key == "internal-modules":
+			codec.internalModules = splitOption(definition)
 		case key == "internal-types":
 			codec.internalTypes = splitOption(definition)
 		case key == "routing-required":
@@ -201,12 +191,16 @@ func newCodec(specificationFormat string, options map[string]string) (*codec, er
 				return nil, fmt.Errorf("cannot convert `generate-rpc-samples` value %q to boolean: %w", definition, err)
 			}
 			codec.generateRpcSamples = value
+		case key == "handwritten-surface":
+			codec.handwrittenSurface = splitOption(definition)
 		case key == "internal-builders":
 			value, err := strconv.ParseBool(definition)
 			if err != nil {
 				return nil, fmt.Errorf("cannot convert `internal-builders` value %q to boolean: %w", definition, err)
 			}
 			codec.internalBuilders = value
+		case key == "extensible-builders":
+			codec.extensibleBuilders = splitOption(definition)
 		case key == "quickstart-service-override":
 			codec.quickstartServiceOverride = definition
 		case key == "include-rpc-status-conversion":
@@ -217,6 +211,8 @@ func newCodec(specificationFormat string, options map[string]string) (*codec, er
 			codec.includeRpcStatusConversion = value
 		case key == "grpc-client":
 			codec.grpcClient = definition
+		case key == "prost-path":
+			codec.prostPath = definition
 		case key == "default-transport":
 			if definition != "grpc" && definition != "http" {
 				return nil, fmt.Errorf("invalid `default-transport` value %q, expected \"grpc\" or \"http\"", definition)
@@ -291,6 +287,9 @@ type codec struct {
 	//
 	// TODO(#1173) - this only supports services and oneofs at the moment.
 	nameOverrides map[string]string
+	// Message module name overrides. Maps message IDs to new module names in model.rs, e.g.:
+	//   .google.cloud.compute.v1.globalFrontendSettings: global_frontend_settings_requests
+	messageModuleNameOverrides map[string]string
 	// The year when the files were first generated.
 	generationYear string
 	// The full path of the generated module within the crate. This defaults to
@@ -336,10 +335,6 @@ type codec struct {
 	idempotencyHook string
 	// If true, this includes gRPC streaming methods.
 	includeStreamingMethods bool
-	// If true, this includes gRPC bi-directional streaming methods.
-	includeBidiStreamingMethods bool
-	// If true, this includes gRPC server-side streaming methods.
-	includeServerStreamingMethods bool
 	// If true, google.rpc.Status conversion is generated in convert.rs.
 	includeRpcStatusConversion bool
 	// If true, the generator will produce per-client features.
@@ -358,6 +353,8 @@ type codec struct {
 	hasVeneer bool
 	// Additional modules, maybe with hand-crafted code.
 	extraModules []string
+	// A list of extra modules which should only be `pub(crate)`.
+	internalModules []string
 	// A list of types which should only be `pub(crate)`.
 	//
 	// In rare cases, it is easiest to manage type visibility via the codec
@@ -380,12 +377,18 @@ type codec struct {
 	generateSetterSamples bool
 	// If true, the generator will produce reference documentation samples for functions that correspond to RPCs.
 	generateRpcSamples bool
+	// List of service IDs that have a handwritten surface, or ["true"] if all services do.
+	handwrittenSurface []string
 	// If true, the generator will set the internal builder's visibility to public (crate).
 	internalBuilders bool
+	// A list of method IDs whose generated request builders expose `pub(crate)` internals.
+	extensibleBuilders []string
 	// Overrides the default heuristically selected service for the package-level quickstart.
 	quickstartServiceOverride string
 	// The Rust type used for the inner gRPC client in generated transports.
 	grpcClient string
+	// The path to the generated prost module, e.g. "super::prost".
+	prostPath string
 	// The default transport protocol for unary methods ("grpc" or "http").
 	defaultTransport string
 }
@@ -693,13 +696,13 @@ func (c *codec) messageScopeName(m *api.Message, childPackageName, sourceSpecifi
 		if err != nil {
 			return "", err
 		}
-		return p + "::" + toSnake(m.Name), nil
+		return p + "::" + c.MessageModuleName(m), nil
 	}
 	p, err := c.messageScopeName(m.Parent, m.Package, sourceSpecificationPackageName)
 	if err != nil {
 		return "", err
 	}
-	return p + "::" + toSnake(m.Name), nil
+	return p + "::" + c.MessageModuleName(m), nil
 }
 
 func (c *codec) enumScopeName(e *api.Enum, sourceSpecificationPackageName string) (string, error) {
@@ -1382,7 +1385,7 @@ func (c *codec) tryFieldRustdocLink(id string, model *api.API, scope string) (st
 				if err != nil {
 					return "", err
 				}
-				return fmt.Sprintf("%s::%s", p, toSnakeNoMangling(c.FieldName(f))), nil
+				return fmt.Sprintf("%s::%s", p, strings.TrimPrefix(toSnake(c.FieldName(f)), "r#")), nil
 			}
 			return c.tryOneOfRustdocLink(f, m, scope)
 		}
@@ -1393,7 +1396,7 @@ func (c *codec) tryFieldRustdocLink(id string, model *api.API, scope string) (st
 			if err != nil {
 				return "", err
 			}
-			return fmt.Sprintf("%s::%s", p, toSnakeNoMangling(o.Name)), nil
+			return fmt.Sprintf("%s::%s", p, strings.TrimPrefix(toSnake(o.Name), "r#")), nil
 		}
 	}
 	return "", nil
@@ -1407,7 +1410,7 @@ func (c *codec) tryOneOfRustdocLink(field *api.Field, message *api.Message, scop
 				if err != nil {
 					return "", err
 				}
-				return fmt.Sprintf("%s::%s", p, toSnakeNoMangling(o.Name)), nil
+				return fmt.Sprintf("%s::%s", p, strings.TrimPrefix(toSnake(o.Name), "r#")), nil
 			}
 		}
 	}
@@ -1625,19 +1628,29 @@ func (c *codec) FieldName(field *api.Field) string {
 	return field.Name
 }
 
+// MessageModuleName returns the module name for a message in model.rs, taking message_module_name_overrides into account.
+func (c *codec) MessageModuleName(m *api.Message) string {
+	if override, ok := c.messageModuleNameOverrides[m.ID]; ok {
+		return override
+	}
+	return toSnake(m.Name)
+}
+
 func (c *codec) generateMethod(m *api.Method) bool {
 	// Ignore methods without HTTP annotations, we cannot generate working
 	// RPCs for them.
 	// TODO(#499) - switch to explicitly excluding such functions. Easier to
 	//     find them and fix them that way.
 	if m.ClientSideStreaming || m.ServerSideStreaming {
-		if m.ClientSideStreaming && m.ServerSideStreaming && c.includeBidiStreamingMethods {
+		if m.ClientSideStreaming && m.ServerSideStreaming {
 			return true
 		}
-		if !m.ClientSideStreaming && m.ServerSideStreaming && c.includeServerStreamingMethods {
+		if !m.ClientSideStreaming && m.ServerSideStreaming {
 			return true
 		}
-		return c.includeStreamingMethods
+		if m.ClientSideStreaming && !m.ServerSideStreaming {
+			return c.includeStreamingMethods || c.includeGrpcOnlyMethods
+		}
 	}
 	if c.includeGrpcOnlyMethods || c.defaultTransport == "grpc" {
 		return true
@@ -1653,17 +1666,11 @@ func (c *codec) templateSupportsGrpc() bool {
 }
 
 func (c *codec) hasBidiStreaming(model *api.API) bool {
-	if !c.templateSupportsGrpc() || !c.includeBidiStreamingMethods {
-		return false
-	}
-	return slices.ContainsFunc(model.Services, (*api.Service).HasBidiStreaming)
+	return c.templateSupportsGrpc() && slices.ContainsFunc(model.Services, (*api.Service).HasBidiStreaming)
 }
 
 func (c *codec) hasServerStreaming(model *api.API) bool {
-	if !c.templateSupportsGrpc() || !c.includeServerStreamingMethods {
-		return false
-	}
-	return slices.ContainsFunc(model.Services, (*api.Service).HasServerSideStreaming)
+	return c.templateSupportsGrpc() && slices.ContainsFunc(model.Services, (*api.Service).HasServerSideStreaming)
 }
 
 func (c *codec) hasStreaming(model *api.API) bool {
@@ -1680,15 +1687,44 @@ func (c *codec) hasGrpc(model *api.API) bool {
 	return c.hasStreaming(model)
 }
 
-// escapeKeyword is the list of Rust keywords and reserved words can be found
-// at https://doc.rust-lang.org/reference/keywords.html.
+func (c *codec) serviceHandwrittenSurface(serviceID string) bool {
+	if len(c.handwrittenSurface) == 1 && c.handwrittenSurface[0] == "true" {
+		return true
+	}
+	return slices.Contains(c.handwrittenSurface, serviceID)
+}
+
+func (c *codec) serviceHasVeneer(serviceID string) bool {
+	return c.serviceHandwrittenSurface(serviceID) || c.hasVeneer
+}
+
+func (c *codec) serviceInternalBuilders(serviceID string) bool {
+	return c.serviceHandwrittenSurface(serviceID) || c.internalBuilders
+}
+
+func (c *codec) serviceGenerateRpcSamples(serviceID string) bool {
+	if c.serviceHandwrittenSurface(serviceID) {
+		return false
+	}
+	return c.generateRpcSamples
+}
+
+// escapeKeyword maps Rust keywords to safe identifiers.
+//
+// Keywords that cannot be used as raw identifiers (r#crate, r#self, r#super, r#Self)
+// according to https://doc.rust-lang.org/reference/identifiers.html#grammar-RESERVED_RAW_IDENTIFIER
+// are suffixed with an underscore, matching prost-build.
+// All other keywords are prefixed with "r#".
 func escapeKeyword(symbol string) string {
+	switch symbol {
+	case "crate", "self", "super", "Self":
+		return symbol + "_"
+	}
 	keywords := map[string]bool{
 		"as":       true,
 		"break":    true,
 		"const":    true,
 		"continue": true,
-		"crate":    true,
 		"else":     true,
 		"enum":     true,
 		"extern":   true,
@@ -1707,11 +1743,8 @@ func escapeKeyword(symbol string) string {
 		"pub":      true,
 		"ref":      true,
 		"return":   true,
-		"self":     true,
-		"Self":     true,
 		"static":   true,
 		"struct":   true,
-		"super":    true,
 		"trait":    true,
 		"true":     true,
 		"type":     true,
@@ -1742,9 +1775,8 @@ func escapeKeyword(symbol string) string {
 		// Reserved in Rust 2018+
 		"try": true,
 	}
-	_, ok := keywords[symbol]
-	if !ok {
-		return symbol
+	if keywords[symbol] {
+		return "r#" + symbol
 	}
-	return "r#" + symbol
+	return symbol
 }

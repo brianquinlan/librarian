@@ -37,8 +37,7 @@ func generateProstHybrid(ctx context.Context, model *api.API, rootTypeIDs []stri
 		return nil
 	}
 
-	allowedAnyFields := append(slices.Clone(library.Rust.AllowGrpcAnyFields), library.Rust.AllowStreamingAnyTypes...)
-	hybridModel, unusedTypes, hasGoogleRpcStatus, err := filterModelToTypes(model, rootTypeIDs, allowedAnyFields)
+	hybridModel, unusedTypes, hasGoogleRpcStatus, err := filterModelToTypes(model, rootTypeIDs, library.Rust.AllowGrpcAnyFields)
 	if err != nil {
 		return err
 	}
@@ -48,7 +47,7 @@ func generateProstHybrid(ctx context.Context, model *api.API, rootTypeIDs []stri
 	if hybridConfig.Codec == nil {
 		hybridConfig.Codec = make(map[string]string)
 	}
-	hybridConfig.Codec["convert-include-package"] = model.PackageName
+	hybridConfig.Codec["include-file"] = "includes.rs"
 	if len(unusedTypes) > 0 {
 		hybridConfig.Codec["unused-types"] = strings.Join(unusedTypes, "\n")
 	}
@@ -63,6 +62,7 @@ func generateProstHybrid(ctx context.Context, model *api.API, rootTypeIDs []stri
 		convertModelCfg.Codec["include-rpc-status-conversion"] = "true"
 	}
 	convertModelCfg.Codec["template-override"] = "templates/convert-prost"
+	convertModelCfg.Codec["prost-path"] = "super::prost"
 	convertOutDir := filepath.Join(outdir, "src")
 	if err := sidekickrust.Generate(ctx, hybridModel, convertOutDir, &convertModelCfg); err != nil {
 		return fmt.Errorf("generating convert.rs: %w", err)

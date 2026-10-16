@@ -47,12 +47,14 @@ const (
 
 type modelAnnotations struct {
 	PackageName                string
+	PackageModuleName          string
 	PackageVersion             string
 	ReleaseLevel               string
 	PackageNamespace           string
 	RequiredPackages           []string
 	ExternPackages             []string
 	HasLROs                    bool
+	ProstPath                  string
 	IncludeRpcStatusConversion bool
 	CopyrightYear              string
 	BoilerPlate                []string
@@ -84,6 +86,8 @@ type modelAnnotations struct {
 	ExtraFeatures []string
 	// A list of additional modules loaded by the `lib.rs` file.
 	ExtraModules []string
+	// A list of additional `pub(crate)` modules loaded by the `lib.rs` file.
+	InternalModules []string
 	// If true, at lease one service has a method we cannot wrap (yet).
 	Incomplete bool
 	// If true, the generator will produce reference documentation samples for message fields setters.
@@ -276,14 +280,18 @@ func annotateModel(model *api.API, codec *codec) (*modelAnnotations, error) {
 	// are populated for convert-prost generation in hybrid crates.
 	// Override ProstRelativeName after all method annotations so ToProto and FromProto
 	// resolve to crate::prost::<pkg>::<TypeName>.
+	prostPrefix := "crate::prost::"
+	if codec.prostPath != "" {
+		prostPrefix = codec.prostPath + "::"
+	}
 	for _, e := range model.ExternalEnums {
 		if ann, ok := e.Codec.(*enumAnnotation); ok {
-			ann.ProstRelativeName = "crate::prost::" + packageToModuleName(e.Package) + "::" + prostEnumRelativePath(e)
+			ann.ProstRelativeName = prostPrefix + packageToModuleName(e.Package) + "::" + prostEnumRelativePath(e)
 		}
 	}
 	for _, m := range model.ExternalMessages {
 		if ann, ok := m.Codec.(*messageAnnotation); ok {
-			ann.ProstRelativeName = "crate::prost::" + packageToModuleName(m.Package) + "::" + prostMessageRelativePath(m)
+			ann.ProstRelativeName = prostPrefix + packageToModuleName(m.Package) + "::" + prostMessageRelativePath(m)
 		}
 	}
 
@@ -355,15 +363,23 @@ func annotateModel(model *api.API, codec *codec) (*modelAnnotations, error) {
 	if hasDiscoveryLROs && perServiceFeatures {
 		extraFeatures = []string{lroOperationFeature}
 	}
+	var extraModules []string
+	for _, mod := range codec.extraModules {
+		if !slices.Contains(codec.internalModules, mod) {
+			extraModules = append(extraModules, mod)
+		}
+	}
 
 	ann := &modelAnnotations{
 		PackageName:                codec.packageName(model),
+		PackageModuleName:          packageToModuleName(model.PackageName),
 		PackageNamespace:           codec.rootModuleName(model),
 		PackageVersion:             codec.version,
 		ReleaseLevel:               codec.releaseLevel,
 		RequiredPackages:           requiredPackages(codec.extraPackages),
 		ExternPackages:             externPackages(codec.extraPackages),
 		HasLROs:                    hasLROs,
+		ProstPath:                  codec.prostPath,
 		IncludeRpcStatusConversion: includeRpcStatusConversion,
 		CopyrightYear:              codec.generationYear,
 		BoilerPlate: append(license.HeaderBulk(),
@@ -378,7 +394,8 @@ func annotateModel(model *api.API, codec *codec) (*modelAnnotations, error) {
 		DisabledClippyWarnings:  codec.disabledClippyWarnings,
 		PerServiceFeatures:      perServiceFeatures,
 		ExtraFeatures:           extraFeatures,
-		ExtraModules:            codec.extraModules,
+		ExtraModules:            extraModules,
+		InternalModules:         codec.internalModules,
 		Incomplete: slices.ContainsFunc(model.Services, func(s *api.Service) bool {
 			return slices.ContainsFunc(s.Methods, func(m *api.Method) bool { return !codec.generateMethod(m) })
 		}),

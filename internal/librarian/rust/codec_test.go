@@ -1291,6 +1291,16 @@ func TestBuildModuleCodec(t *testing.T) {
 			},
 		},
 		{
+			name:    "with HandwrittenSurface",
+			library: &config.Library{},
+			module: &config.RustModule{
+				HandwrittenSurface: "true",
+			},
+			want: map[string]string{
+				"handwritten-surface": "true",
+			},
+		},
+		{
 			name:    "with InternalBuilders",
 			library: &config.Library{},
 			module: &config.RustModule{
@@ -1447,11 +1457,13 @@ func TestBuildCodec(t *testing.T) {
 					IncludeStreamingMethods:   true,
 					PerServiceFeatures:        true,
 					HasVeneer:                 true,
+					ExtensibleBuilders:        []string{".a.b.Service.Method1", ".a.b.Service.Method2"},
 					RoutingRequired:           true,
 					NameOverrides:             "foo=bar",
 					QuickstartServiceOverride: "OverriddenService",
 					DefaultFeatures:           []string{"feature1", "feature2"},
 					DisabledClippyWarnings:    []string{"clippy1", "clippy2"},
+					InternalModules:           []string{"internal_mod1", "internal_mod2"},
 				},
 			},
 			want: map[string]string{
@@ -1463,6 +1475,7 @@ func TestBuildCodec(t *testing.T) {
 				"per-service-features":        "true",
 				"detailed-tracing-attributes": "true",
 				"has-veneer":                  "true",
+				"extensible-builders":         ".a.b.Service.Method1,.a.b.Service.Method2",
 				"routing-required":            "true",
 				"generate-setter-samples":     "true",
 				"generate-rpc-samples":        "true",
@@ -1472,6 +1485,7 @@ func TestBuildCodec(t *testing.T) {
 				"default-features":            "feature1,feature2",
 				"disabled-rustdoc-warnings":   "warning1,warning2",
 				"disabled-clippy-warnings":    "clippy1,clippy2",
+				"internal-modules":            "internal_mod1,internal_mod2",
 				"release-level":               "stable",
 				"package:dep1":                "package=pkg1,source=1.0",
 				"package:dep2":                "feature=feat2,ignore=true",
@@ -1628,6 +1642,54 @@ func TestBuildModuleCodec_IdempotencyHook(t *testing.T) {
 		got := buildModuleCodec(library, module)
 		if got["idempotency-hook"] != "module_hook" {
 			t.Errorf("expected idempotency-hook to be %q, got %q", "module_hook", got["idempotency-hook"])
+		}
+	})
+}
+
+func TestBuildModuleCodec_ExtensibleBuilders(t *testing.T) {
+	t.Run("module level extensible_builders", func(t *testing.T) {
+		library := &config.Library{
+			Name: "google-cloud-bigquery",
+		}
+		module := &config.RustModule{
+			ExtensibleBuilders: []string{".google.cloud.bigquery.storage.v1.BigQueryRead.ReadRows"},
+		}
+		got := buildModuleCodec(library, module)
+		want := ".google.cloud.bigquery.storage.v1.BigQueryRead.ReadRows"
+		if got["extensible-builders"] != want {
+			t.Errorf("expected extensible-builders to be %q, got %q", want, got["extensible-builders"])
+		}
+	})
+
+	t.Run("crate level fallback extensible_builders", func(t *testing.T) {
+		library := &config.Library{
+			Name: "google-cloud-bigquery",
+			Rust: &config.RustCrate{
+				ExtensibleBuilders: []string{".google.cloud.bigquery.storage.v1.BigQueryRead.ReadRows"},
+			},
+		}
+		module := &config.RustModule{}
+		got := buildModuleCodec(library, module)
+		want := ".google.cloud.bigquery.storage.v1.BigQueryRead.ReadRows"
+		if got["extensible-builders"] != want {
+			t.Errorf("expected extensible-builders to be %q, got %q", want, got["extensible-builders"])
+		}
+	})
+
+	t.Run("module overrides crate level extensible_builders", func(t *testing.T) {
+		library := &config.Library{
+			Name: "google-cloud-bigquery",
+			Rust: &config.RustCrate{
+				ExtensibleBuilders: []string{".a.b.CrateMethod"},
+			},
+		}
+		module := &config.RustModule{
+			ExtensibleBuilders: []string{".a.b.ModuleMethod"},
+		}
+		got := buildModuleCodec(library, module)
+		want := ".a.b.ModuleMethod"
+		if got["extensible-builders"] != want {
+			t.Errorf("expected extensible-builders to be %q, got %q", want, got["extensible-builders"])
 		}
 	})
 }

@@ -29,11 +29,11 @@ const (
 	wellKnownProtobufPackage = "google.protobuf"
 	// The name of the corresponding Swift package that contains the Swift implementations of these
 	// types.
-	wellKnownSwiftPackage = "GoogleCloudWKT"
+	wellKnownSwiftPackage = "GoogleWKT"
 	// The name of the Swift package that contains the pagination helper types.
-	paginationSwiftPackage = "GoogleCloudGax"
+	paginationSwiftPackage = "GoogleGax"
 	// The name of the Swift package that contains the long-running operation helper types.
-	lroSwiftPackage = "GoogleCloudGax"
+	lroSwiftPackage = "GoogleGax"
 )
 
 // codec represents the configuration for a Swift sidekick Codec.
@@ -60,7 +60,7 @@ type codec struct {
 	LibraryName string
 
 	// TargetLibraryName is the PascalCase name of the Swift SPM target/library being built
-	// (e.g. "GoogleCloudSecretManagerV1", "GoogleCloudStorage", or "GoogleCloudWKT").
+	// (e.g. "GoogleCloudSecretManagerV1", "GoogleCloudStorage", or "GoogleWKT").
 	//
 	// We need TargetLibraryName to correctly identify self-imports in skipDependency.
 	//
@@ -79,7 +79,9 @@ type codec struct {
 	// The package version (e.g. "1.2.3").
 	PackageVersion string
 
-	// The location of the monorepo, relative to the current directory.
+	// The location of the monorepo, relative to the output directory. This
+	// always uses forward slashes, as it is interpolated into the generated
+	// Package.swift manifest.
 	//
 	// Recall that sidekick only generates clients within a monorepo, so this
 	// always makes sense.
@@ -94,7 +96,7 @@ type codec struct {
 	// Map of proto package to dependency (e.g. "google.protobuf" -> <dependency>)
 	ApiPackages map[string]*Dependency
 
-	// Map of dependency name to dependency (e.g. GoogleCloudGax -> <dependency>)
+	// Map of dependency name to dependency (e.g. GoogleGax -> <dependency>)
 	DependenciesByName map[string]*Dependency
 
 	// If true, the generated code uses a trait (Swift #ifdef-analogs) for each
@@ -107,6 +109,9 @@ type codec struct {
 	// If true, bytes need to be serialized and deserialized using the URL-safe
 	// base64 alphabet.
 	UrlSafeForBytes bool
+
+	// If true, generate enums that represent only string values, with no integer conversions.
+	UseStringEnums bool
 
 	// Tracks generated files, considering case-insensitive filesystems.
 	//
@@ -141,6 +146,29 @@ type codec struct {
 	// Codec-level overrides for service names.
 	// TODO(https://github.com/googleapis/google-cloud-swift/issues/308): Support overriding other symbol types (e.g., messages, enums, oneofs) if needed.
 	NameOverrides map[string]string
+
+	// LROAnyConverter names the generated converter for the `Any` fields of
+	// `google.longrunning.Operation`, or is empty to convert them generically.
+	//
+	// The name is configured rather than derived because the module that
+	// generates the converter and the module that converts `Operation` are
+	// separate generation runs that cannot see each other. The generated
+	// converter takes this name and covers the payload types of every service
+	// in its module, so the name a module declares and the name the
+	// `Operation` fields call always agree. A library whose long-running
+	// operations span two modules would declare the name twice, which does not
+	// compile; no library is in that shape today.
+	LROAnyConverter string
+
+	// QuickstartServiceOverride overrides the default heuristically selected service for the package-level quickstart.
+	QuickstartServiceOverride string
+
+	// IdempotencyHook configures an opt-in method on the request struct to resolve and transform idempotency request options before dispatch.
+	IdempotencyHook string
+
+	// DuplicateTypeNames maps simple type names to true if they occur multiple times
+	// across messages and enums in the model.
+	DuplicateTypeNames map[string]bool
 }
 
 const (
@@ -206,11 +234,12 @@ func newCodec(model *api.API, library *config.Library, module *config.SwiftModul
 		PackageName:        packageName,
 		PackageRepoName:    packageRepoName,
 		PackageVersion:     packageVersion,
-		MonorepoRoot:       rel,
+		MonorepoRoot:       filepath.ToSlash(rel),
 		ApiPackages:        map[string]*Dependency{},
 		DependenciesByName: map[string]*Dependency{},
 		UrlSafeForBytes:    library.SpecificationFormat == config.SpecDiscovery,
 		ResponseEncoding:   responseEncoding,
+		UseStringEnums:     library.SpecificationFormat == config.SpecDiscovery,
 	}
 
 	swiftCfg := library.Swift
@@ -225,6 +254,15 @@ func newCodec(model *api.API, library *config.Library, module *config.SwiftModul
 		}
 		result.PerServiceTraits = swiftCfg.PerServiceTraits
 		result.DefaultTraits = swiftCfg.DefaultTraits
+		result.LROAnyConverter = swiftCfg.LROAnyConverter
+		result.QuickstartServiceOverride = swiftCfg.QuickstartServiceOverride
+		if result.LROAnyConverter != "" && result.PerServiceTraits {
+			// The converter covers every service in the package, so there is
+			// no single trait to gate it on. Supporting both would mean
+			// emitting one `#if` group per service inside the converter, which
+			// no library needs today.
+			return nil, fmt.Errorf("swift: library %q sets both lro_any_converter and per_service_traits, which cannot be combined", library.Name)
+		}
 	}
 
 	if module != nil {
@@ -232,6 +270,15 @@ func newCodec(model *api.API, library *config.Library, module *config.SwiftModul
 		result.ModuleType = module.ModuleType
 		result.ModulePath = module.ModulePath
 	}
+
+	idempotencyHook := ""
+	if swiftCfg != nil {
+		idempotencyHook = swiftCfg.IdempotencyHook
+	}
+	if module != nil && module.IdempotencyHook != "" {
+		idempotencyHook = module.IdempotencyHook
+	}
+	result.IdempotencyHook = idempotencyHook
 
 	nameOverrides := make(map[string]string)
 	if swiftCfg != nil {
@@ -254,7 +301,31 @@ func newCodec(model *api.API, library *config.Library, module *config.SwiftModul
 		// Modules cannot have library names, so they should not try to set the value.
 		result.LibraryName = libraryName
 	}
+
+	duplicateTypeNames := make(map[string]bool)
+	if model != nil {
+		typeCounts := make(map[string]int)
+		for m := range model.AllMessages() {
+			typeCounts[messageSimpleName(m)]++
+		}
+		for e := range model.AllEnums() {
+			typeCounts[enumName(e)]++
+		}
+		for name, count := range typeCounts {
+			if count > 1 {
+				duplicateTypeNames[name] = true
+			}
+		}
+	}
+	if len(duplicateTypeNames) > 0 {
+		result.DuplicateTypeNames = duplicateTypeNames
+	}
+
 	return result, nil
+}
+
+func (c *codec) isDuplicateTypeName(name string) bool {
+	return c.DuplicateTypeNames[name]
 }
 
 func (c *codec) addApiPackageDependency(apiName string) (*Dependency, error) {

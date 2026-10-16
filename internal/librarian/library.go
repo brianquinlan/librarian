@@ -143,17 +143,8 @@ func fillRust(lib *config.Library, d *config.Default) *config.Library {
 	if lib.Rust.GenerateRpcSamples == "" {
 		lib.Rust.GenerateRpcSamples = d.Rust.GenerateRpcSamples
 	}
-	if lib.Rust.IncludeBidiStreamingMethods == nil {
-		lib.Rust.IncludeBidiStreamingMethods = d.Rust.IncludeBidiStreamingMethods
-	}
-	if lib.Rust.IncludeServerStreamingMethods == nil {
-		lib.Rust.IncludeServerStreamingMethods = d.Rust.IncludeServerStreamingMethods
-	}
 	if len(lib.Rust.AllowGrpcAnyFields) == 0 {
 		lib.Rust.AllowGrpcAnyFields = d.Rust.AllowGrpcAnyFields
-	}
-	if len(lib.Rust.AllowStreamingAnyTypes) == 0 {
-		lib.Rust.AllowStreamingAnyTypes = d.Rust.AllowStreamingAnyTypes
 	}
 	for _, mod := range lib.Rust.Modules {
 		if mod.GenerateSetterSamples == "" {
@@ -161,12 +152,6 @@ func fillRust(lib *config.Library, d *config.Default) *config.Library {
 		}
 		if mod.GenerateRpcSamples == "" {
 			mod.GenerateRpcSamples = lib.Rust.GenerateRpcSamples
-		}
-		if mod.IncludeBidiStreamingMethods == nil {
-			mod.IncludeBidiStreamingMethods = lib.Rust.IncludeBidiStreamingMethods
-		}
-		if mod.IncludeServerStreamingMethods == nil {
-			mod.IncludeServerStreamingMethods = lib.Rust.IncludeServerStreamingMethods
 		}
 	}
 	return lib
@@ -379,6 +364,8 @@ func fillLibraryDefaults(language string, lib *config.Library) (*config.Library,
 		return php.Fill(lib), nil
 	case config.LanguagePython:
 		return python.Fill(lib)
+	case config.LanguageNodejs:
+		return nodejs.Fill(lib), nil
 	default:
 		return lib, nil
 	}
@@ -397,10 +384,10 @@ func FindLibrary(c *config.Config, name string) (*config.Library, error) {
 	return nil, fmt.Errorf("%w: %q", ErrLibraryNotFound, name)
 }
 
-// ResolvePreview returns a library where fields from lib.Preview override
+// resolvePreview returns a library where fields from lib.Preview override
 // those in the base lib, if set. If lib.Preview is not set or lib itself is nil
 // this returns nil.
-func ResolvePreview(lib *config.Library, language string) *config.Library {
+func resolvePreview(lib *config.Library, language string) *config.Library {
 	if lib == nil || lib.Preview == nil {
 		return nil
 	}
@@ -631,9 +618,6 @@ func mergeJava(dst, src *config.JavaModule) *config.JavaModule {
 	if src.ExcludedPOMs != nil {
 		res.ExcludedPOMs = src.ExcludedPOMs
 	}
-	if src.ExtraVersionedModules != "" {
-		res.ExtraVersionedModules = src.ExtraVersionedModules
-	}
 	if src.GroupID != "" {
 		res.GroupID = src.GroupID
 	}
@@ -645,9 +629,6 @@ func mergeJava(dst, src *config.JavaModule) *config.JavaModule {
 	}
 	if src.LibraryTypeOverride != "" {
 		res.LibraryTypeOverride = src.LibraryTypeOverride
-	}
-	if src.MinJavaVersion != 0 {
-		res.MinJavaVersion = src.MinJavaVersion
 	}
 	if src.NamePrettyOverride != "" {
 		res.NamePrettyOverride = src.NamePrettyOverride
@@ -823,6 +804,12 @@ func mergeRust(dst, src *config.RustCrate) *config.RustCrate {
 	if src.DisabledClippyWarnings != nil {
 		res.DisabledClippyWarnings = src.DisabledClippyWarnings
 	}
+	if src.HandwrittenSurface != "" {
+		res.HandwrittenSurface = src.HandwrittenSurface
+	}
+	if src.ExtensibleBuilders != nil {
+		res.ExtensibleBuilders = src.ExtensibleBuilders
+	}
 	if src.HasVeneer {
 		res.HasVeneer = src.HasVeneer
 	}
@@ -835,17 +822,8 @@ func mergeRust(dst, src *config.RustCrate) *config.RustCrate {
 	if src.IncludeStreamingMethods {
 		res.IncludeStreamingMethods = src.IncludeStreamingMethods
 	}
-	if src.IncludeBidiStreamingMethods != nil {
-		res.IncludeBidiStreamingMethods = src.IncludeBidiStreamingMethods
-	}
-	if src.IncludeServerStreamingMethods != nil {
-		res.IncludeServerStreamingMethods = src.IncludeServerStreamingMethods
-	}
 	if len(src.AllowGrpcAnyFields) > 0 {
 		res.AllowGrpcAnyFields = src.AllowGrpcAnyFields
-	}
-	if len(src.AllowStreamingAnyTypes) > 0 {
-		res.AllowStreamingAnyTypes = src.AllowStreamingAnyTypes
 	}
 	if src.PostProcessProtos != "" {
 		res.PostProcessProtos = src.PostProcessProtos
@@ -856,12 +834,18 @@ func mergeRust(dst, src *config.RustCrate) *config.RustCrate {
 	if src.PaginationOverrides != nil {
 		res.PaginationOverrides = src.PaginationOverrides
 	}
+	if src.MessageModuleNameOverrides != nil {
+		res.MessageModuleNameOverrides = src.MessageModuleNameOverrides
+	}
 	if src.NameOverrides != "" {
 		res.NameOverrides = src.NameOverrides
 	}
 	res.Discovery = mergeCommonDiscovery(res.Discovery, src.Discovery)
 	if src.QuickstartServiceOverride != "" {
 		res.QuickstartServiceOverride = src.QuickstartServiceOverride
+	}
+	if src.InternalModules != nil {
+		res.InternalModules = src.InternalModules
 	}
 	return &res
 }
@@ -928,6 +912,12 @@ func mergeSwift(dst, src *config.SwiftPackage) *config.SwiftPackage {
 	}
 	if src.DefaultTraits != nil {
 		res.DefaultTraits = src.DefaultTraits
+	}
+	if src.QuickstartServiceOverride != "" {
+		res.QuickstartServiceOverride = src.QuickstartServiceOverride
+	}
+	if src.IdempotencyHook != "" {
+		res.IdempotencyHook = src.IdempotencyHook
 	}
 	res.Discovery = mergeCommonDiscovery(res.Discovery, src.Discovery)
 	return &res

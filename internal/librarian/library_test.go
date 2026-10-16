@@ -855,6 +855,24 @@ func TestApplyDefaults_Error(t *testing.T) {
 	}
 }
 
+func TestApplyDefaults_Nodejs(t *testing.T) {
+	lib := &config.Library{
+		Name: "google-cloud-secretmanager",
+		APIs: []*config.API{{Path: "google/cloud/secretmanager/v1"}},
+	}
+	got, err := applyDefaults(config.LanguageNodejs, lib, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Nodejs == nil {
+		t.Fatal("got.Nodejs is nil")
+	}
+	wantPackageName := "@google-cloud/secretmanager"
+	if diff := cmp.Diff(wantPackageName, got.Nodejs.PackageName); diff != "" {
+		t.Errorf("mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestCanDeriveAPIPath(t *testing.T) {
 	for _, test := range []struct {
 		name     string
@@ -1068,7 +1086,7 @@ func TestResolvePreview(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			got := ResolvePreview(test.lib, test.language)
+			got := resolvePreview(test.lib, test.language)
 			if diff := cmp.Diff(test.want, got); diff != "" {
 				t.Errorf("mismatch (-want +got):\n%s", diff)
 			}
@@ -1095,10 +1113,10 @@ func TestResolvePreview_NoMutation(t *testing.T) {
 
 	want := *lib
 
-	_ = ResolvePreview(lib, config.LanguageGo)
+	_ = resolvePreview(lib, config.LanguageGo)
 
 	if diff := cmp.Diff(want, *lib); diff != "" {
-		t.Errorf("ResolvePreview mutated the input library (-want +got):\n%s", diff)
+		t.Errorf("resolvePreview mutated the input library (-want +got):\n%s", diff)
 	}
 }
 
@@ -1408,11 +1426,9 @@ func TestMergeJava(t *testing.T) {
 				ClientDocumentationOverride:  "doc",
 				CodeownerTeam:                "team",
 				ExcludedPOMs:                 []string{"ex-pom"},
-				ExtraVersionedModules:        "extra",
 				GroupID:                      "com.new",
 				IssueTrackerOverride:         "issue",
 				LibraryTypeOverride:          "type",
-				MinJavaVersion:               11,
 				NamePrettyOverride:           "pretty",
 				ProductDocumentationOverride: "prod-doc",
 				RecommendedPackage:           "rec",
@@ -1432,11 +1448,9 @@ func TestMergeJava(t *testing.T) {
 				ClientDocumentationOverride:  "doc",
 				CodeownerTeam:                "team",
 				ExcludedPOMs:                 []string{"ex-pom"},
-				ExtraVersionedModules:        "extra",
 				GroupID:                      "com.new",
 				IssueTrackerOverride:         "issue",
 				LibraryTypeOverride:          "type",
-				MinJavaVersion:               11,
 				NamePrettyOverride:           "pretty",
 				ProductDocumentationOverride: "prod-doc",
 				RecommendedPackage:           "rec",
@@ -1620,6 +1634,7 @@ func TestMergeRust(t *testing.T) {
 				IncludedIds:               []string{"iid"},
 				SkippedIds:                []string{"sid"},
 				DisabledClippyWarnings:    []string{"clip"},
+				ExtensibleBuilders:        []string{".a.b.C.D"},
 				HasVeneer:                 true,
 				RoutingRequired:           true,
 				IncludeGrpcOnlyMethods:    true,
@@ -1630,6 +1645,7 @@ func TestMergeRust(t *testing.T) {
 				NameOverrides:             "name",
 				Discovery:                 &config.RustDiscovery{OperationID: "op-new", Pollers: []config.RustPoller{{Prefix: "pre"}}},
 				QuickstartServiceOverride: "quick",
+				InternalModules:           []string{"internal_mod"},
 			},
 			want: &config.RustCrate{
 				RustDefault: config.RustDefault{
@@ -1652,6 +1668,7 @@ func TestMergeRust(t *testing.T) {
 				IncludedIds:               []string{"iid"},
 				SkippedIds:                []string{"sid"},
 				DisabledClippyWarnings:    []string{"clip"},
+				ExtensibleBuilders:        []string{".a.b.C.D"},
 				HasVeneer:                 true,
 				RoutingRequired:           true,
 				IncludeGrpcOnlyMethods:    true,
@@ -1662,6 +1679,7 @@ func TestMergeRust(t *testing.T) {
 				NameOverrides:             "name",
 				Discovery:                 &config.RustDiscovery{OperationID: "op-new", Pollers: []config.RustPoller{{Prefix: "pre"}}},
 				QuickstartServiceOverride: "quick",
+				InternalModules:           []string{"internal_mod"},
 			},
 		},
 		{
@@ -1700,6 +1718,25 @@ func TestMergeRust(t *testing.T) {
 			},
 			want: &config.RustCrate{
 				Discovery: &config.RustDiscovery{},
+			},
+		},
+		{
+			name: "replaces message module name overrides",
+			dst: &config.RustCrate{
+				MessageModuleNameOverrides: map[string]string{
+					"id1": "mod1",
+					"id2": "mod2",
+				},
+			},
+			src: &config.RustCrate{
+				MessageModuleNameOverrides: map[string]string{
+					"id3": "mod3",
+				},
+			},
+			want: &config.RustCrate{
+				MessageModuleNameOverrides: map[string]string{
+					"id3": "mod3",
+				},
 			},
 		},
 	} {
@@ -1810,6 +1847,7 @@ func TestMergeSwift(t *testing.T) {
 				Discovery: &config.SwiftDiscovery{
 					OperationID: "op1",
 				},
+				QuickstartServiceOverride: "Service1",
 			},
 			src: &config.SwiftPackage{
 				SwiftDefault: config.SwiftDefault{
@@ -1823,6 +1861,8 @@ func TestMergeSwift(t *testing.T) {
 				Discovery: &config.SwiftDiscovery{
 					OperationID: "op2",
 				},
+				QuickstartServiceOverride: "Service2",
+				IdempotencyHook:           "resolveIdempotency",
 			},
 			want: &config.SwiftPackage{
 				SwiftDefault: config.SwiftDefault{
@@ -1836,6 +1876,8 @@ func TestMergeSwift(t *testing.T) {
 				Discovery: &config.SwiftDiscovery{
 					OperationID: "op2",
 				},
+				QuickstartServiceOverride: "Service2",
+				IdempotencyHook:           "resolveIdempotency",
 			},
 		},
 	} {

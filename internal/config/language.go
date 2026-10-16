@@ -49,6 +49,33 @@ const (
 	LanguageSwift = "swift"
 )
 
+// GoInternalCopy describes a private copy of an API's messages generated
+// into an internal Go package.
+type GoInternalCopy struct {
+	// ImportPath is the Go import path of the copy, relative to
+	// cloud.google.com/go, in canonical form and inside the library's own
+	// module. It must contain an "internal" path element so that the copy
+	// cannot be imported by users of the library, and must not overlap the
+	// directory of another copy or of a generated client. Existing symlinks
+	// below the library output directory are rejected before generation.
+	ImportPath string `yaml:"import_path"`
+	// Plugin is the required additional protoc plugin, without the
+	// "protoc-gen-" prefix, for example "go-vtproto". The binary is looked
+	// up in the Go tool bin directory, then on the PATH. Declare its Go
+	// module under tools.go. The name must contain only letters, digits,
+	// "-", or "_".
+	Plugin string `yaml:"plugin"`
+	// PluginOptions are passed as `--<plugin>_opt` values. The plugin must
+	// write its output next to protoc-gen-go's, under the Go import path.
+	// Layout options `paths=`, `module=`, and `M<file>=` import mappings are
+	// rejected, including in comma-separated parameter lists.
+	PluginOptions []string `yaml:"plugin_options,omitempty"`
+	// ProtoPackage is the proto package of the copy. It must be a valid
+	// proto package name that differs from the proto package of the API and
+	// of every other copy.
+	ProtoPackage string `yaml:"proto_package"`
+}
+
 // GoModule represents the Go-specific configuration for a library.
 type GoModule struct {
 	// DeleteGenerationOutputPaths is a list of paths to delete before generation.
@@ -76,6 +103,15 @@ type GoAPI struct {
 	EnabledGeneratorFeatures []string `yaml:"enabled_generator_features,omitempty"`
 	// ImportPath is the Go import path for the API.
 	ImportPath string `yaml:"import_path,omitempty"`
+	// InternalCopies lists private copies of the API's messages to generate
+	// into internal Go packages, so that an additional protoc plugin can run
+	// on each copy without its output becoming part of the public API surface.
+	// Each copy is generated from the proto files in the API directory,
+	// without services, under a renamed proto package so that it can be
+	// linked beside the public package. Copies require the open protobuf API
+	// level. A copy directory holds generated code only and is removed
+	// entirely before regeneration, so handwritten code must live outside it.
+	InternalCopies []*GoInternalCopy `yaml:"internal_copies,omitempty"`
 	// NestedProtos is a list of nested proto files.
 	NestedProtos []string `yaml:"nested_protos,omitempty"`
 	// NoMetadata indicates whether to skip generating gapic_metadata.json.
@@ -122,20 +158,9 @@ type RustDefault struct {
 	// ResourceNameHeuristic indicates whether to apply heuristics to identify and generate resource names.
 	ResourceNameHeuristic *bool `yaml:"resource_name_heuristic,omitempty"`
 
-	// IncludeBidiStreamingMethods indicates whether to include gRPC bi-directional streaming
-	// methods.
-	IncludeBidiStreamingMethods *bool `yaml:"include_bidi_streaming_methods,omitempty"`
-
-	// IncludeServerStreamingMethods indicates whether to include gRPC server-side streaming
-	// methods.
-	IncludeServerStreamingMethods *bool `yaml:"include_server_streaming_methods,omitempty"`
-
 	// AllowGrpcAnyFields is a list of protobuf field IDs with google.protobuf.Any
 	// permitted in gRPC/streaming RPCs (their fields will be dropped in prost conversion).
 	AllowGrpcAnyFields []string `yaml:"allow_grpc_any_fields,omitempty"`
-
-	// AllowStreamingAnyTypes is deprecated: use allow_grpc_any_fields instead.
-	AllowStreamingAnyTypes []string `yaml:"allow_streaming_any_types,omitempty"`
 
 	// GrpcClient is the Rust type used for the inner gRPC client in generated transports.
 	// Defaults to "gaxi::grpc::Client".
@@ -201,22 +226,24 @@ type RustModule struct {
 	// methods.
 	IncludeStreamingMethods bool `yaml:"include_streaming_methods,omitempty"`
 
-	// IncludeBidiStreamingMethods indicates whether to include gRPC bi-directional streaming
-	// methods.
-	IncludeBidiStreamingMethods *bool `yaml:"include_bidi_streaming_methods,omitempty"`
-
-	// IncludeServerStreamingMethods indicates whether to include gRPC server-side streaming
-	// methods.
-	IncludeServerStreamingMethods *bool `yaml:"include_server_streaming_methods,omitempty"`
+	// HandwrittenSurface indicates whether the module or specific services have a handwritten surface.
+	// Accepts "true" for all services, or a comma-separated list of service IDs.
+	HandwrittenSurface string `yaml:"handwritten_surface,omitempty"`
 
 	// InternalBuilders indicates whether generated builders should be internal to the crate.
 	InternalBuilders bool `yaml:"internal_builders,omitempty"`
+
+	// ExtensibleBuilders is a list of method IDs whose generated request builders expose pub(crate) internals.
+	ExtensibleBuilders []string `yaml:"extensible_builders,omitempty"`
 
 	// ModulePath is the Rust module path for converters
 	// (e.g., "crate::generated::gapic::model").
 	ModulePath string `yaml:"module_path,omitempty"`
 
 	ModuleRoots map[string]string `yaml:"module_roots,omitempty"`
+
+	// MessageModuleNameOverrides contains codec-level overrides for message module names in model.rs.
+	MessageModuleNameOverrides map[string]string `yaml:"message_module_name_overrides,omitempty"`
 
 	// NameOverrides contains codec-level overrides for type and service names.
 	NameOverrides string `yaml:"name_overrides,omitempty"`
@@ -295,6 +322,13 @@ type RustCrate struct {
 	// DisabledClippyWarnings is a list of clippy warnings to disable.
 	DisabledClippyWarnings []string `yaml:"disabled_clippy_warnings,omitempty"`
 
+	// HandwrittenSurface indicates whether the crate or specific services have a handwritten surface.
+	// Accepts "true" for all services, or a comma-separated list of service IDs.
+	HandwrittenSurface string `yaml:"handwritten_surface,omitempty"`
+
+	// ExtensibleBuilders is a list of method IDs whose generated request builders expose pub(crate) internals.
+	ExtensibleBuilders []string `yaml:"extensible_builders,omitempty"`
+
 	// HasVeneer indicates whether the crate has a veneer.
 	HasVeneer bool `yaml:"has_veneer,omitempty"`
 
@@ -320,6 +354,9 @@ type RustCrate struct {
 	// PaginationOverrides contains overrides for pagination configuration.
 	PaginationOverrides []RustPaginationOverride `yaml:"pagination_overrides,omitempty"`
 
+	// MessageModuleNameOverrides contains codec-level overrides for message module names in model.rs.
+	MessageModuleNameOverrides map[string]string `yaml:"message_module_name_overrides,omitempty"`
+
 	// NameOverrides contains codec-level overrides for type and service names.
 	NameOverrides string `yaml:"name_overrides,omitempty"`
 
@@ -328,6 +365,9 @@ type RustCrate struct {
 
 	// QuickstartServiceOverride overrides the default heuristically selected service for the package-level quickstart.
 	QuickstartServiceOverride string `yaml:"quickstart_service_override,omitempty"`
+
+	// InternalModules is a list of kept extra modules that should have pub(crate) visibility instead of pub.
+	InternalModules []string `yaml:"internal_modules,omitempty"`
 }
 
 // RustPackageDependency represents a package dependency configuration.
@@ -519,6 +559,9 @@ type JavaDefault struct {
 	// LibrariesBOMVersion is the version of the libraries-bom to use for Java.
 	// This must be set in the default configuration.
 	LibrariesBOMVersion string `yaml:"libraries_bom_version,omitempty"`
+	// MinJavaVersion is the minimum Java version required, used only in README generation.
+	// Defaults to 8 if unspecified.
+	MinJavaVersion int `yaml:"min_java_version,omitempty"`
 }
 
 // JavaModule contains Java-specific library configuration.
@@ -558,9 +601,6 @@ type JavaModule struct {
 	// when updating pom.xml and are omitted when counting new modules.
 	ExcludedPOMs []string `yaml:"excluded_poms,omitempty"`
 
-	// ExtraVersionedModules is a list of extra versioned modules.
-	ExtraVersionedModules string `yaml:"extra_versioned_modules,omitempty"`
-
 	// GroupID is the Maven group ID, defaults to "com.google.cloud".
 	GroupID string `yaml:"group_id,omitempty"`
 
@@ -578,9 +618,6 @@ type JavaModule struct {
 	// LibraryTypeOverride allows the "library_type" field in .repo-metadata.json
 	// to be overridden.
 	LibraryTypeOverride string `yaml:"library_type_override,omitempty"`
-
-	// MinJavaVersion is the minimum Java version required.
-	MinJavaVersion int `yaml:"min_java_version,omitempty"`
 
 	// NamePrettyOverride allows the "name_pretty" field in .repo-metadata.json
 	// to be overridden.
@@ -651,15 +688,6 @@ type JavaAPI struct {
 	// It expects the full path starting from the root of the googleapis
 	// directory (e.g., "google/cloud/aiplatform/v1/schema/io_format.proto").
 	ExcludedProtos []string `yaml:"excluded_protos,omitempty"`
-
-	// SkipProtoClassGeneration is a list of proto files to exclude from
-	// generating proto module, but included in generating gRPC or GAPIC
-	// modules and packaged proto files.
-	// It expects the full path starting from the root of the googleapis
-	// directory (e.g., "google/cloud/aiplatform/v1beta1/schema/geometry.proto").
-	// TODO(https://github.com/googleapis/librarian/issues/5661):
-	// remove after migration.
-	SkipProtoClassGeneration []string `yaml:"skip_proto_class_generation,omitempty"`
 
 	// GAPICArtifactIDOverride overrides the artifact ID for the GAPIC module.
 	// It determines the module's directory name and is used to derive proto
@@ -835,6 +863,10 @@ type NodejsPackage struct {
 	MainService string `yaml:"main_service,omitempty"`
 
 	// PackageName is the npm package name (e.g., "@google-cloud/access-approval").
+	// For standard Google Cloud libraries ("google-cloud-*"), it is automatically
+	// derived as "@google-cloud/<suffix>" if omitted. For non-cloud libraries,
+	// this is required and must be configured explicitly or populated during
+	// "librarian add".
 	PackageName string `yaml:"package_name,omitempty"`
 
 	// ClientDocumentationOverride allows the client_documentation field in
@@ -856,6 +888,11 @@ type NodejsAPI struct {
 	// DIREGAPIC indicates whether generation uses DIREGAPIC (Discovery REST GAPICs).
 	// This is typically false. Used for the GCE (compute) client.
 	DIREGAPIC bool `yaml:"diregapic,omitempty"`
+
+	// ExcludeProtos is a list of proto files to exclude from generation.
+	// It expects the full path starting from the root of the googleapis
+	// directory (e.g., "google/cloud/aiplatform/v1/schema/io_format.proto").
+	ExcludeProtos []string `yaml:"exclude_protos,omitempty"`
 
 	// Mixins controls mixin behavior for this API (e.g., "none" to disable).
 	// When set, this overrides the package-level mixins setting.

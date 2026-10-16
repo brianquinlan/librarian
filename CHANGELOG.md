@@ -1,5 +1,153 @@
 # Changelog
 
+## [0.48.0](https://github.com/googleapis/librarian/compare/v0.47.0...v0.48.0) (2026-10-09)
+
+
+### Features
+
+* **sidekick/swift:** add doc comments for init(fromAny:) ([#7767](https://github.com/googleapis/librarian/issues/7767)) ([effccd5](https://github.com/googleapis/librarian/commit/effccd554d55bf97a44257d075c04491c614b831))
+* **sidekick/swift:** support ExistentialAny ([#7762](https://github.com/googleapis/librarian/issues/7762)) ([d8be62b](https://github.com/googleapis/librarian/commit/d8be62b8b83ffd619217bf652255620b1457fad4))
+
+
+### Bug Fixes
+
+* **python:** force using tools installed pandoc binary ([#7765](https://github.com/googleapis/librarian/issues/7765)) ([d264768](https://github.com/googleapis/librarian/commit/d2647684eec5494833609d023fd4f7cf58075d3f))
+* **sidekick/swift:** note Discovery LRO return type ([#7763](https://github.com/googleapis/librarian/issues/7763)) ([a6ef617](https://github.com/googleapis/librarian/commit/a6ef6178eb85ebc1d77bdd5c1ac27fb13e578ff0))
+
+## [0.47.0](https://github.com/googleapis/librarian/compare/v0.46.0...v0.47.0) (2026-10-06)
+
+
+### Features
+
+* **librarian/swift/publish:** parallelize publish with topological sort ([#7740](https://github.com/googleapis/librarian/issues/7740)) ([0b2d680](https://github.com/googleapis/librarian/commit/0b2d680a7e46163f5c7addb5c13960491c20948f))
+* **sidekick/swift:** enable MemberImportVisibility ([#7754](https://github.com/googleapis/librarian/issues/7754)) ([c79cd37](https://github.com/googleapis/librarian/commit/c79cd374b1965ce6f6ba407eb6c5a8d3e7ebddb7))
+* **sidekick/swift:** handle duplicate names ([#7736](https://github.com/googleapis/librarian/issues/7736)) ([42dc482](https://github.com/googleapis/librarian/commit/42dc48284952022420dd48b93fe9c33f79e25687))
+
+
+### Bug Fixes
+
+* **rust:** publish dry runs ([#7735](https://github.com/googleapis/librarian/issues/7735)) ([7e63426](https://github.com/googleapis/librarian/commit/7e63426757f3d19e49c03a7e4e07e741adf79e44)), refs [#7734](https://github.com/googleapis/librarian/issues/7734)
+* **sidekick/rust:** support reserved raw idents ([#7752](https://github.com/googleapis/librarian/issues/7752)) ([8462101](https://github.com/googleapis/librarian/commit/846210126594b287952cabfb69bd8fe161d7ec65))
+* **sidekick/swift:** pass initial pageToken ([#7745](https://github.com/googleapis/librarian/issues/7745)) ([65e3b6c](https://github.com/googleapis/librarian/commit/65e3b6c145ea05d1e4a0270bd0e6d2388804e029))
+
+## [0.46.0](https://github.com/googleapis/librarian/compare/v0.45.0...v0.46.0) (2026-09-29)
+
+
+### Features
+
+* **internal/librarian/java:** tidy redundant issue_tracker_override matching sdk.yaml ([#7652](https://github.com/googleapis/librarian/issues/7652)) ([8c9f0b2](https://github.com/googleapis/librarian/commit/8c9f0b211601fe34a76439863d71ab7cebc80e52)), refs [#6689](https://github.com/googleapis/librarian/issues/6689)
+* **internal/sidekick/rust:** generate string-only enums for Discovery services ([#7684](https://github.com/googleapis/librarian/issues/7684)) ([dc53971](https://github.com/googleapis/librarian/commit/dc53971e5e14b1ea8fb9bd7407727ed8c17c89ef))
+* **internal/sidekick/swift:** conform generated enums to Hashable ([#7681](https://github.com/googleapis/librarian/issues/7681)) ([ec3d876](https://github.com/googleapis/librarian/commit/ec3d876baf1cea721b889daa4ca91348e2d82372))
+* **rust:** add message_module_name_overrides to customize model modules ([#7724](https://github.com/googleapis/librarian/issues/7724)) ([e778f27](https://github.com/googleapis/librarian/commit/e778f271b6466091164b3876537b42d709e3fee3)), refs [#7664](https://github.com/googleapis/librarian/issues/7664)
+* **sidekick/swift:** annotate transport entry points with [@concurrent](https://github.com/concurrent) ([#7688](https://github.com/googleapis/librarian/issues/7688)) ([8773f3b](https://github.com/googleapis/librarian/commit/8773f3bf9033724236ba7b8ad20fbf4b81850df7))
+* **sidekick/swift:** auto populated fields ([#7707](https://github.com/googleapis/librarian/issues/7707)) ([24c1e26](https://github.com/googleapis/librarian/commit/24c1e26d279baf0cc08ef1140c8125c34b60f2e2))
+* **sidekick/swift:** configure strict-memory-safety for generated packages ([#7683](https://github.com/googleapis/librarian/issues/7683)) ([24a3a5e](https://github.com/googleapis/librarian/commit/24a3a5efddb2c580614584923e9af4771fa00055))
+* **sidekick/swift:** emit @Sendable on LRO status and polling closures ([#7687](https://github.com/googleapis/librarian/issues/7687)) ([507d497](https://github.com/googleapis/librarian/commit/507d497b7b69b5b9b2ec127456fe12ad1c3a7b5a))
+* **sidekick/swift:** enable InternalImportsByDefault and public imports ([#7648](https://github.com/googleapis/librarian/issues/7648)) ([c41d434](https://github.com/googleapis/librarian/commit/c41d4341800efc7d0545e58c0cccf263a1a3fc40))
+* **sidekick/swift:** generate paginated methods with Sendable types ([#7676](https://github.com/googleapis/librarian/issues/7676)) ([9f21bc2](https://github.com/googleapis/librarian/commit/9f21bc2f56372d88c776bc6008acef05253e37e7))
+* **sidekick/swift:** import GoogleWKTConvert with SPI attribute ([#7708](https://github.com/googleapis/librarian/issues/7708)) ([5af14c4](https://github.com/googleapis/librarian/commit/5af14c437539563805b2bb14720318c61f208523))
+* **sidekick/swift:** improve README and DocC ([#7712](https://github.com/googleapis/librarian/issues/7712)) ([d16aff3](https://github.com/googleapis/librarian/commit/d16aff394bfcd895eb20d5fcc9bea45e5c35efea))
+* **sidekick/swift:** poll until done in LROs ([#7710](https://github.com/googleapis/librarian/issues/7710)) ([9a3b691](https://github.com/googleapis/librarian/commit/9a3b6914988652e916ec4d0cceb202165889b8d3))
+* **sidekick/swift:** prefix WKT types with WKT ([b53e04f](https://github.com/googleapis/librarian/commit/b53e04f3d8c3bde0d7f542f4387943e5a35c062f))
+* **sidekick/swift:** reduce LRO helpers protocol bloat ([#7678](https://github.com/googleapis/librarian/issues/7678)) ([c5e76d2](https://github.com/googleapis/librarian/commit/c5e76d2b9168fdbd720fce3dbcb638641f97f8b1))
+* **sidekick/swift:** reduce protocol bloat ([#7654](https://github.com/googleapis/librarian/issues/7654)) ([1e8a5f8](https://github.com/googleapis/librarian/commit/1e8a5f8e586ff88f5aa528a4d5ffff32e124318f))
+* **sidekick/swift:** rename LRO helpers ([#7674](https://github.com/googleapis/librarian/issues/7674)) ([4dbe623](https://github.com/googleapis/librarian/commit/4dbe623803611fec189dba45955bee8bc86529b7))
+* **sidekick/swift:** return some AsyncSequence in pagination methods ([#7701](https://github.com/googleapis/librarian/issues/7701)) ([d266dcc](https://github.com/googleapis/librarian/commit/d266dcc4c1c554dabc13d81d1d9740907576dda5))
+* **sidekick/swift:** support idempotency hook ([#7711](https://github.com/googleapis/librarian/issues/7711)) ([91a307d](https://github.com/googleapis/librarian/commit/91a307d7ed0daba6dad8e3f1fa1b298aa11d87bd))
+* **sidekick/swift:** use &lt;methodName&gt;ByItems for paginated APIs ([#7672](https://github.com/googleapis/librarian/issues/7672)) ([14d789d](https://github.com/googleapis/librarian/commit/14d789ddd26eecb3ceb3fb1b19513f129a4a480c))
+* **sidekick/swift:** use PollingBackoffPolicy ([#7721](https://github.com/googleapis/librarian/issues/7721)) ([bfd0a7b](https://github.com/googleapis/librarian/commit/bfd0a7b10a3ba4e0d969cbe753adc4ed76df6ce6))
+
+
+### Bug Fixes
+
+* **generate:** race related to `docindex` ([#7691](https://github.com/googleapis/librarian/issues/7691)) ([227f13c](https://github.com/googleapis/librarian/commit/227f13c6157362d5a2432092a948696961caaa07))
+* **internal/librarian/swift:** do not force push by default in publish ([#7686](https://github.com/googleapis/librarian/issues/7686)) ([c34e6bb](https://github.com/googleapis/librarian/commit/c34e6bbb06ffbb9fcce6b575cce6b96dd7cf6860))
+* **internal/sidekick:** restore protocol method ([#7689](https://github.com/googleapis/librarian/issues/7689)) ([1844d22](https://github.com/googleapis/librarian/commit/1844d227af9ccbafad0ad1f4949b71092204c068))
+* **sidekick/swift:** discovery enum strings ([#7690](https://github.com/googleapis/librarian/issues/7690)) ([8fca08c](https://github.com/googleapis/librarian/commit/8fca08cb910bfbbcc6be3a3707195593d29899d5))
+* **sidekick/swift:** import `GoogleWKT` in snippets ([#7658](https://github.com/googleapis/librarian/issues/7658)) ([cc5aa92](https://github.com/googleapis/librarian/commit/cc5aa92f886cbf399f528c6acfdf38a3774cec4f))
+* **sidekick/swift:** import GoogleGax with @_spi(GoogleCloudInternal) ([#7725](https://github.com/googleapis/librarian/issues/7725)) ([7c65269](https://github.com/googleapis/librarian/commit/7c65269b376473a74bb502e5b2188b97f5b5d559))
+* **sidekick/swift:** name oneof enums with a OneOf suffix ([#7682](https://github.com/googleapis/librarian/issues/7682)) ([9123a70](https://github.com/googleapis/librarian/commit/9123a70e188e72c4598c280a3a41d6dbb995a781))
+* **sidekick/swift:** no ints for discovery `enum`s ([#7660](https://github.com/googleapis/librarian/issues/7660)) ([7bc8b6d](https://github.com/googleapis/librarian/commit/7bc8b6d5ac3eb2f0ca5baf51bd8ebd92f4a2804b))
+* **sidekick/swift:** remove optional in oneof ([#7714](https://github.com/googleapis/librarian/issues/7714)) ([58171d0](https://github.com/googleapis/librarian/commit/58171d07aced1ec8ae537f3a0158700361a78956))
+* **sidekick/swift:** remove spurious throws from generated paginated methods ([#7661](https://github.com/googleapis/librarian/issues/7661)) ([49d5f70](https://github.com/googleapis/librarian/commit/49d5f703d3e0efa50de4e1c2b940618d16c9ed7c))
+* **sidekick/swift:** skip streaming RPCs automatically ([#7677](https://github.com/googleapis/librarian/issues/7677)) ([fc7cc02](https://github.com/googleapis/librarian/commit/fc7cc025d938eccb903af780b33d5d6abe962e2e))
+* **sidekick/swift:** use typeURL for LRO Any ([#7709](https://github.com/googleapis/librarian/issues/7709)) ([d3931fe](https://github.com/googleapis/librarian/commit/d3931fe272c78d1a714016b03f5c42bb5270fa17))
+
+## [0.45.0](https://github.com/googleapis/librarian/compare/v0.44.0...v0.45.0) (2026-09-22)
+
+
+### Features
+
+* **internal/config:** define Go internal copy settings ([#7605](https://github.com/googleapis/librarian/issues/7605)) ([1799f8a](https://github.com/googleapis/librarian/commit/1799f8a9ff31d5e5c10acae0812600f1cc81136a))
+* **internal/librarian/golang:** clean internal copy directories ([#7607](https://github.com/googleapis/librarian/issues/7607)) ([1aacd83](https://github.com/googleapis/librarian/commit/1aacd83ffc5bea325723b7b2d9c1df73255fefdb))
+* **internal/librarian/golang:** derive default library name from proto option ([#7594](https://github.com/googleapis/librarian/issues/7594)) ([71cf10d](https://github.com/googleapis/librarian/commit/71cf10dc6ffcb58223d4214fc805aeb5ddaad946)), refs [#7466](https://github.com/googleapis/librarian/issues/7466)
+* **internal/librarian/golang:** derive import path from proto option ([#7599](https://github.com/googleapis/librarian/issues/7599)) ([cbe019c](https://github.com/googleapis/librarian/commit/cbe019c2365982ee680efb1d47df9650db5303c6)), refs [#7466](https://github.com/googleapis/librarian/issues/7466)
+* **internal/librarian/golang:** derive versioned import path from proto ([#7598](https://github.com/googleapis/librarian/issues/7598)) ([f3613e4](https://github.com/googleapis/librarian/commit/f3613e4d30290b3dbc9aa08962dffb5cdd49650c)), refs [#7466](https://github.com/googleapis/librarian/issues/7466)
+* **internal/librarian/golang:** generate private protobuf copies ([#7613](https://github.com/googleapis/librarian/issues/7613)) ([8aa1ee4](https://github.com/googleapis/librarian/commit/8aa1ee4df6baa2c40fbda5e4283d0fc0ff378f0d))
+* **internal/librarian/golang:** rewrite internal copy descriptors ([#7606](https://github.com/googleapis/librarian/issues/7606)) ([562be84](https://github.com/googleapis/librarian/commit/562be840ff2267631f3b4c6773ae0dc850de563d))
+* **internal/librarian/java:** make min_java_version a repository default ([#7633](https://github.com/googleapis/librarian/issues/7633)) ([1c2496d](https://github.com/googleapis/librarian/commit/1c2496d570a32b2b9685fea575d789b1831a3775))
+* **internal/librarian/python:** allow adding APIs to custom GAPIC libs ([#7611](https://github.com/googleapis/librarian/issues/7611)) ([b49e8f4](https://github.com/googleapis/librarian/commit/b49e8f4141fa845682a1be5b1b79125a2800793b)), refs [#7600](https://github.com/googleapis/librarian/issues/7600)
+* **internal/librarian/python:** copy opt_args_by_api when adding new APIs ([#7612](https://github.com/googleapis/librarian/issues/7612)) ([60f76ef](https://github.com/googleapis/librarian/commit/60f76ef4f0d956789af24fa5c4769a8c0d52c062)), refs [#7600](https://github.com/googleapis/librarian/issues/7600)
+* **internal/librarian:** Swift and Rust generate the libraries index ([#7596](https://github.com/googleapis/librarian/issues/7596)) ([2425013](https://github.com/googleapis/librarian/commit/2425013230a1b3825146a4db801f89d302a1b82d))
+* **internal/proto:** add Search helper function ([#7592](https://github.com/googleapis/librarian/issues/7592)) ([372a1c7](https://github.com/googleapis/librarian/commit/372a1c72390e851eb300bb1dfc2261c464ff17ee)), refs [#7466](https://github.com/googleapis/librarian/issues/7466)
+* **sidekick/swift:** convert long-running operation payloads ([#7603](https://github.com/googleapis/librarian/issues/7603)) ([c76cf29](https://github.com/googleapis/librarian/commit/c76cf2954204b9f514896a88de9963a180ed2044))
+* **sidekick/swift:** document package traits ([#7645](https://github.com/googleapis/librarian/issues/7645)) ([a55b2f1](https://github.com/googleapis/librarian/commit/a55b2f12c6b771b7de877601b4412001be480fe1))
+* **sidekick/swift:** enum usage docs ([#7640](https://github.com/googleapis/librarian/issues/7640)) ([b147053](https://github.com/googleapis/librarian/commit/b14705360e44b647254af3311375cb3dd61edf51))
+* **sidekick/swift:** generate `.spi.yml` file ([#7637](https://github.com/googleapis/librarian/issues/7637)) ([bd04b53](https://github.com/googleapis/librarian/commit/bd04b53417856506b99b3c0752c97657d65dd8c0))
+* **sidekick/swift:** generate unknown field deserialization ([#7586](https://github.com/googleapis/librarian/issues/7586)) ([aa0aad8](https://github.com/googleapis/librarian/commit/aa0aad83eb975d0b9d434911db61f3117d915e33))
+* **sidekick/swift:** suppress `deprecated` diagnostics ([#7638](https://github.com/googleapis/librarian/issues/7638)) ([979e0b1](https://github.com/googleapis/librarian/commit/979e0b1f56b2b33df2889e4c20fa4fc95ddb44c8))
+* **sidekick/swift:** validate and encode URL paths ([#7589](https://github.com/googleapis/librarian/issues/7589)) ([b53c490](https://github.com/googleapis/librarian/commit/b53c490f3e6b2514fccfac6054ac97ffd8ea8797))
+* **sidekick/swift:** version type-only packages ([#7619](https://github.com/googleapis/librarian/issues/7619)) ([639e65e](https://github.com/googleapis/librarian/commit/639e65e45720a3daa59e44d48520fef6e04596c8))
+
+
+### Bug Fixes
+
+* **internal/tool/pnpm:** prevent corepack from overriding pnpm version ([#7627](https://github.com/googleapis/librarian/issues/7627)) ([aabffb8](https://github.com/googleapis/librarian/commit/aabffb86da8c98eff14d29c69d68ad0cdcb54b10)), refs [#7623](https://github.com/googleapis/librarian/issues/7623)
+* **librarian/swift:** fix bump command for Swift ([#7604](https://github.com/googleapis/librarian/issues/7604)) ([1d440c3](https://github.com/googleapis/librarian/commit/1d440c3600ad42165491511ba6ed92fa0e5b4af7))
+* **sidekick/swift:** generate internal methods with @_spi ([#7635](https://github.com/googleapis/librarian/issues/7635)) ([eda9633](https://github.com/googleapis/librarian/commit/eda963358ecc94505cd1a9976794f8d4958d3604))
+* **sidekick/swift:** generate Package.swift with conditional local or remote deps ([#7615](https://github.com/googleapis/librarian/issues/7615)) ([b0aa5eb](https://github.com/googleapis/librarian/commit/b0aa5eb2423c39999e0085f24ca4071f34db2dba))
+* **sidekick/swift:** path parameters and body ([#7595](https://github.com/googleapis/librarian/issues/7595)) ([f2209f8](https://github.com/googleapis/librarian/commit/f2209f8f5161b3f48d39aacf47eb1b24c736eea6))
+
+## [0.44.0](https://github.com/googleapis/librarian/compare/v0.43.0...v0.44.0) (2026-09-14)
+
+
+### Features
+
+* **librarian/swift:** track directory moves for publish command ([#7579](https://github.com/googleapis/librarian/issues/7579)) ([62b6966](https://github.com/googleapis/librarian/commit/62b69660d3663977842a3352d81fdfb05bfb9729))
+* **sidekick/swift:** multiple HTTP bindings ([#7584](https://github.com/googleapis/librarian/issues/7584)) ([c76ba2f](https://github.com/googleapis/librarian/commit/c76ba2f1909c4b71d5f94c8e162d39aa026e40be))
+
+## [0.43.0](https://github.com/googleapis/librarian/compare/v0.42.0...v0.43.0) (2026-09-14)
+
+
+### Features
+
+* **internal/config:** add comment field to configuration schema ([#7539](https://github.com/googleapis/librarian/issues/7539)) ([b1deabc](https://github.com/googleapis/librarian/commit/b1deabc796318a7e7717531f0222581715984a2d))
+* **internal/config:** add NodejsDefault with custom_scopes ([#7525](https://github.com/googleapis/librarian/issues/7525)) ([f0fd2d4](https://github.com/googleapis/librarian/commit/f0fd2d40031f45ed70e25629dbc6bee61255c180))
+* **internal/config:** rename custom_scopes to custom_package_prefixes ([#7536](https://github.com/googleapis/librarian/issues/7536)) ([8b73142](https://github.com/googleapis/librarian/commit/8b7314210503f312aee7c81bc1df4abb2385d903))
+* **internal/librarian/nodejs:** derive package name from custom prefixes ([#7553](https://github.com/googleapis/librarian/issues/7553)) ([f877089](https://github.com/googleapis/librarian/commit/f877089af2bc9ccf3622e62fe87d6c02be60f78b))
+* **internal/librarian/nodejs:** support excluding protos from generation ([#7574](https://github.com/googleapis/librarian/issues/7574)) ([fd91f7a](https://github.com/googleapis/librarian/commit/fd91f7adf3161acefc1800a15a74c45735bade71)), refs [#7217](https://github.com/googleapis/librarian/issues/7217)
+* **internal/sidekick/rust:** support default_transport configuration ([#7503](https://github.com/googleapis/librarian/issues/7503)) ([5480d3f](https://github.com/googleapis/librarian/commit/5480d3f7c314fc3f6def9de9066a5345cef344e1))
+* **internal/tool/pip:** force reinstall git packages ([#7538](https://github.com/googleapis/librarian/issues/7538)) ([2bf3435](https://github.com/googleapis/librarian/commit/2bf3435004bea4dd66274b093b562c4d7bf591f5))
+* **sidekick/rust:** allow fields to be renamed on BigQuery template ([#7563](https://github.com/googleapis/librarian/issues/7563)) ([6fc6200](https://github.com/googleapis/librarian/commit/6fc6200a40bb4d5642876ae1b8d7347058638f82))
+* **sidekick/rust:** allow fields to be renamed with name_overrides ([#7562](https://github.com/googleapis/librarian/issues/7562)) ([1ee6462](https://github.com/googleapis/librarian/commit/1ee6462082cdc301930d9f3b8d0cf7fd9f516cff))
+* **sidekick/rust:** support unified idempotency_hook configuration ([#7523](https://github.com/googleapis/librarian/issues/7523)) ([4a95ea9](https://github.com/googleapis/librarian/commit/4a95ea9201b45a0d90401b7a07ebe583c4ff1f98))
+* **sidekick/swift:** pass request options to newRequest ([#7573](https://github.com/googleapis/librarian/issues/7573)) ([92b5ee5](https://github.com/googleapis/librarian/commit/92b5ee559d33713d7d35101eb1cf6b021571220e))
+* **sidekick/swift:** rename DocC landing page ([#7557](https://github.com/googleapis/librarian/issues/7557)) ([9f72f4f](https://github.com/googleapis/librarian/commit/9f72f4f37f908b0bfa12d825a81e0d3f4bbbf5af))
+* **sidekick/swift:** Storage Control retry policy ([#7529](https://github.com/googleapis/librarian/issues/7529)) ([efaf46c](https://github.com/googleapis/librarian/commit/efaf46ca275d875d56ecf8eba49451721a2de74a))
+* **sidekick/swift:** use `setBody()` helper ([#7561](https://github.com/googleapis/librarian/issues/7561)) ([d8392c2](https://github.com/googleapis/librarian/commit/d8392c22ca48af842303828274c5046d57b31505))
+* **swift:** add convenience methods without options to StorageControlProtocol ([#7537](https://github.com/googleapis/librarian/issues/7537)) ([a7e2bb7](https://github.com/googleapis/librarian/commit/a7e2bb7558490180b5aed978a35db1f0bafef979))
+* **swift:** generate LRO polling helpers for StorageControl ([#7560](https://github.com/googleapis/librarian/issues/7560)) ([fedb08b](https://github.com/googleapis/librarian/commit/fedb08b3d46a73fbc1b55c610ce6a656ec1ac386))
+
+
+### Bug Fixes
+
+* **.github/workflows:** trigger issue creation on go integration failure ([#7554](https://github.com/googleapis/librarian/issues/7554)) ([ced1712](https://github.com/googleapis/librarian/commit/ced171297f7153a78c2b9742f4bc49767513cae5)), refs [#7484](https://github.com/googleapis/librarian/issues/7484)
+* **internal/librarian/ruby:** omit copyright_year from librarian.yaml ([#7542](https://github.com/googleapis/librarian/issues/7542)) ([65f3767](https://github.com/googleapis/librarian/commit/65f3767c5615913162811461fede7bdcfcf4ad3c))
+* **internal/postprocessing:** add support of copy_and_rename as method_operations ([#7555](https://github.com/googleapis/librarian/issues/7555)) ([b10b439](https://github.com/googleapis/librarian/commit/b10b43925705fc4f9e9f1c8a5546e788b958bd13))
+* **rust:** avoid use conflicts in setter samples ([#7548](https://github.com/googleapis/librarian/issues/7548)) ([4c72bcc](https://github.com/googleapis/librarian/commit/4c72bccefff1442f572f7e795fa3288cbb429e30))
+* **sidekick/swift:** normalize monorepo root to forward slashes ([#7566](https://github.com/googleapis/librarian/issues/7566)) ([d6d0250](https://github.com/googleapis/librarian/commit/d6d02509e1804a5fb37702a14ba3503d2c416f91))
+* **sidekick/swift:** serialize enums as strings in ProtoJSON ([#7569](https://github.com/googleapis/librarian/issues/7569)) ([fafac18](https://github.com/googleapis/librarian/commit/fafac18890d5edaed4bda9fd4d67a76a6f57c6ba))
+
 ## [0.42.0](https://github.com/googleapis/librarian/compare/v0.41.0...v0.42.0) (2026-09-08)
 
 

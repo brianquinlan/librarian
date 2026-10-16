@@ -24,70 +24,25 @@ import (
 )
 
 func TestOneOfAnnotations(t *testing.T) {
-	singular := &api.Field{
-		Name:     "oneof_field",
-		JSONName: "oneofField",
-		ID:       ".test.Message.oneof_field",
-		Typez:    api.TypezString,
-		IsOneOf:  true,
-	}
-	repeated := &api.Field{
-		Name:     "oneof_field_repeated",
-		JSONName: "oneofFieldRepeated",
-		ID:       ".test.Message.oneof_field_repeated",
-		Typez:    api.TypezString,
-		Repeated: true,
-		IsOneOf:  true,
-	}
-	map_field := &api.Field{
-		Name:     "oneof_field_map",
-		JSONName: "oneofFieldMap",
-		ID:       ".test.Message.oneof_field_map",
-		Typez:    api.TypezMessage,
-		TypezID:  ".test.$Map",
-		Repeated: false,
-		IsOneOf:  true,
-	}
-	integer_field := &api.Field{
-		Name:     "oneof_field_integer",
-		JSONName: "oneofFieldInteger",
-		ID:       ".test.Message.oneof_field_integer",
-		Typez:    api.TypezInt64,
-		IsOneOf:  true,
-	}
-	boxed_field := &api.Field{
-		Name:     "oneof_field_boxed",
-		JSONName: "oneofFieldBoxed",
-		ID:       ".test.Message.oneof_field_boxed",
-		Typez:    api.TypezMessage,
-		TypezID:  ".google.protobuf.DoubleValue",
-		Optional: true,
-		IsOneOf:  true,
-	}
+	mapMessage := api.NewTestMapMessage("$Map", api.TypezInt32, api.TypezFloat).
+		WithPackage("test")
 
-	group := &api.OneOf{
-		Name:          "type",
-		ID:            ".test.Message.type",
-		Documentation: "Say something clever about this oneof.",
-		Fields:        []*api.Field{singular, repeated, map_field, integer_field, boxed_field},
-	}
-	message := &api.Message{
-		Name:    "Message",
-		ID:      ".test.Message",
-		Package: "test",
-		Fields:  []*api.Field{singular, repeated, map_field, integer_field, boxed_field},
-		OneOfs:  []*api.OneOf{group},
-	}
-	key_field := &api.Field{Name: "key", Typez: api.TypezInt32}
-	value_field := &api.Field{Name: "value", Typez: api.TypezFloat}
-	map_message := &api.Message{
-		Name:    "$Map",
-		ID:      ".test.$Map",
-		IsMap:   true,
-		Package: "test",
-		Fields:  []*api.Field{key_field, value_field},
-	}
-	model := api.NewTestAPI([]*api.Message{message, map_message}, []*api.Enum{}, []*api.Service{})
+	doubleValue := api.NewTestMessage("DoubleValue").WithPackage("google.protobuf")
+
+	singular := api.NewTestField("oneof_field").WithType(api.TypezString)
+	repeated := api.NewTestField("oneof_field_repeated").WithType(api.TypezString).WithRepeated()
+	mapField := api.NewTestField("oneof_field_map").WithMessageType(mapMessage)
+	integerField := api.NewTestField("oneof_field_integer").WithType(api.TypezInt64)
+	boxedField := api.NewTestField("oneof_field_boxed").
+		WithMessageType(doubleValue).
+		WithOptional()
+
+	group := api.NewTestOneOf("type").
+		WithDocumentation("Say something clever about this oneof.").
+		WithFields(singular, repeated, mapField, integerField, boxedField)
+	message := api.NewTestMessage("Message").
+		WithOneOfs(group)
+	model := api.NewTestAPI([]*api.Message{message, mapMessage}, nil, nil)
 	api.CrossReference(model)
 	codec := createRustCodec()
 	annotateModel(model, codec)
@@ -123,7 +78,7 @@ func TestOneOfAnnotations(t *testing.T) {
 		AddQueryParameter:  `let builder = req.oneof_field().iter().fold(builder, |builder, p| builder.query(&[("oneofField", p)]));`,
 		KeyType:            "",
 		ValueType:          "",
-		OtherFieldsInGroup: []*api.Field{repeated, map_field, integer_field, boxed_field},
+		OtherFieldsInGroup: []*api.Field{repeated, mapField, integerField, boxedField},
 	}
 	if diff := cmp.Diff(wantFieldCodec, singular.Codec, ignore); diff != "" {
 		t.Errorf("mismatch (-want +got):\n%s", diff)
@@ -141,7 +96,7 @@ func TestOneOfAnnotations(t *testing.T) {
 		AddQueryParameter:  `let builder = req.oneof_field_repeated().iter().fold(builder, |builder, p| builder.query(&[("oneofFieldRepeated", p)]));`,
 		KeyType:            "",
 		ValueType:          "",
-		OtherFieldsInGroup: []*api.Field{singular, map_field, integer_field, boxed_field},
+		OtherFieldsInGroup: []*api.Field{singular, mapField, integerField, boxedField},
 	}
 	if diff := cmp.Diff(wantFieldCodec, repeated.Codec, ignore); diff != "" {
 		t.Errorf("mismatch (-want +got):\n%s", diff)
@@ -158,15 +113,15 @@ func TestOneOfAnnotations(t *testing.T) {
 		PrimitiveFieldType: "std::collections::HashMap<i32,f32>",
 		AddQueryParameter:  `let builder = req.oneof_field_map().map(|p| serde_json::to_value(p).map_err(Error::ser) ).transpose()?.into_iter().fold(builder, |builder, p| { use gaxi::query_parameter::QueryParameter; p.add(builder, "oneofFieldMap") });`,
 		KeyType:            "i32",
-		KeyField:           key_field,
+		KeyField:           mapMessage.Fields[0],
 		ValueType:          "f32",
-		ValueField:         value_field,
+		ValueField:         mapMessage.Fields[1],
 		IsBoxed:            true,
 		SerdeAs:            "std::collections::HashMap<wkt::internal::I32, wkt::internal::F32>",
 		SkipIfIsDefault:    true,
-		OtherFieldsInGroup: []*api.Field{singular, repeated, integer_field, boxed_field},
+		OtherFieldsInGroup: []*api.Field{singular, repeated, integerField, boxedField},
 	}
-	if diff := cmp.Diff(wantFieldCodec, map_field.Codec, ignore); diff != "" {
+	if diff := cmp.Diff(wantFieldCodec, mapField.Codec, ignore); diff != "" {
 		t.Errorf("mismatch (-want +got):\n%s", diff)
 	}
 
@@ -182,9 +137,9 @@ func TestOneOfAnnotations(t *testing.T) {
 		AddQueryParameter:  `let builder = req.oneof_field_integer().iter().fold(builder, |builder, p| builder.query(&[("oneofFieldInteger", p)]));`,
 		SerdeAs:            "wkt::internal::I64",
 		SkipIfIsDefault:    true,
-		OtherFieldsInGroup: []*api.Field{singular, repeated, map_field, boxed_field},
+		OtherFieldsInGroup: []*api.Field{singular, repeated, mapField, boxedField},
 	}
-	if diff := cmp.Diff(wantFieldCodec, integer_field.Codec, ignore); diff != "" {
+	if diff := cmp.Diff(wantFieldCodec, integerField.Codec, ignore); diff != "" {
 		t.Errorf("mismatch (-want +got):\n%s", diff)
 	}
 
@@ -196,30 +151,30 @@ func TestOneOfAnnotations(t *testing.T) {
 		FQMessageName:      "crate::model::Message",
 		DocLines:           nil,
 		FieldType:          "std::boxed::Box<wkt::DoubleValue>",
-		MessageType:        boxed_field.MessageType,
+		MessageType:        boxedField.MessageType,
 		PrimitiveFieldType: "wkt::DoubleValue",
 		AddQueryParameter:  `let builder = req.oneof_field_boxed().map(|p| serde_json::to_value(p).map_err(Error::ser) ).transpose()?.into_iter().fold(builder, |builder, p| { use gaxi::query_parameter::QueryParameter; p.add(builder, "oneofFieldBoxed") });`,
 		IsBoxed:            true,
 		SerdeAs:            "wkt::internal::F64",
 		SkipIfIsDefault:    true,
-		OtherFieldsInGroup: []*api.Field{singular, repeated, map_field, integer_field},
+		OtherFieldsInGroup: []*api.Field{singular, repeated, mapField, integerField},
 	}
-	if diff := cmp.Diff(wantFieldCodec, boxed_field.Codec, ignore); diff != "" {
+	if diff := cmp.Diff(wantFieldCodec, boxedField.Codec, ignore); diff != "" {
 		t.Errorf("mismatch (-want +got):\n%s", diff)
 	}
 }
 
 func TestOneOfConflictAnnotations(t *testing.T) {
 	singular := api.NewTestField("oneof_field").WithType(api.TypezString)
-	group := api.NewTestOneOf("nested_thing").WithFields(singular)
-	group.Documentation = "Say something clever about this oneof."
+	group := api.NewTestOneOf("nested_thing").
+		WithDocumentation("Say something clever about this oneof.").
+		WithFields(singular)
 	child := api.NewTestMessage("NestedThing")
 	message := api.NewTestMessage("Message").
-		WithOneOfs(group)
-	message.Messages = []*api.Message{child}
-	child.Parent = message
+		WithOneOfs(group).
+		WithMessages(child)
 
-	model := api.NewTestAPI([]*api.Message{message}, []*api.Enum{}, []*api.Service{})
+	model := api.NewTestAPI([]*api.Message{message}, nil, nil)
 	api.CrossReference(model)
 	codec := newTestCodec(t, libconfig.SpecProtobuf, "", map[string]string{
 		"name-overrides": ".test.Message.nested_thing=NestedThingOneOf",
@@ -249,10 +204,11 @@ func TestOneOfConflictAnnotations(t *testing.T) {
 
 func TestOneOfUnqualifiedConflictAnnotations(t *testing.T) {
 	singular := api.NewTestField("oneof_field").WithType(api.TypezString)
-	group := api.NewTestOneOf("message").WithFields(singular)
-	group.Documentation = "Say something clever about this oneof."
+	group := api.NewTestOneOf("message").
+		WithDocumentation("Say something clever about this oneof.").
+		WithFields(singular)
 	message := api.NewTestMessage("Message").WithOneOfs(group)
-	model := api.NewTestAPI([]*api.Message{message}, []*api.Enum{}, []*api.Service{})
+	model := api.NewTestAPI([]*api.Message{message}, nil, nil)
 	api.CrossReference(model)
 	codec := createRustCodec()
 	annotateModel(model, codec)
@@ -277,4 +233,95 @@ func TestOneOfUnqualifiedConflictAnnotations(t *testing.T) {
 	if diff := cmp.Diff(want, group.Codec, ignore); diff != "" {
 		t.Errorf("mismatch (-want +got):\n%s", diff)
 	}
+}
+
+func TestOneOf_ReservedRawIdentifiers(t *testing.T) {
+	branchSelf := api.NewTestField("self").WithType(api.TypezBool)
+	branchCrate := api.NewTestField("crate").WithType(api.TypezString)
+	branchSuper := api.NewTestField("super").WithType(api.TypezInt32)
+	group := api.NewTestOneOf("self").
+		WithFields(branchSelf, branchCrate, branchSuper)
+	message := api.NewTestMessage("Message").WithOneOfs(group)
+	model := api.NewTestAPI([]*api.Message{message}, nil, nil)
+	if err := api.CrossReference(model); err != nil {
+		t.Fatal(err)
+	}
+	codec := createRustCodec()
+	if _, err := annotateModel(model, codec); err != nil {
+		t.Fatal(err)
+	}
+
+	ignore := cmpopts.IgnoreFields(api.OneOf{}, "Codec")
+	wantOneOf := &oneOfAnnotation{
+		FieldName:           "self_",
+		SetterName:          "self",
+		EnumName:            "Self_",
+		QualifiedName:       "crate::model::message::Self_",
+		RelativeName:        "message::Self_",
+		ProstRelativeName:   "message::Self_",
+		StructQualifiedName: "crate::model::Message",
+		NameInExamples:      "google_cloud_test::model::message::Self_",
+		EnumNameInExamples:  "Self_",
+		FieldType:           "crate::model::message::Self_",
+	}
+	t.Run("oneof", func(t *testing.T) {
+		if diff := cmp.Diff(wantOneOf, group.Codec, ignore); diff != "" {
+			t.Errorf("mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	ignoreField := cmpopts.IgnoreFields(api.Field{}, "Codec")
+	wantSelfBranch := &fieldAnnotations{
+		FieldName:          "self_",
+		SetterName:         "self",
+		BranchName:         "Self_",
+		ProstBranchName:    "Self_",
+		FQMessageName:      "crate::model::Message",
+		FieldType:          "bool",
+		PrimitiveFieldType: "bool",
+		AddQueryParameter:  `let builder = req.self_().iter().fold(builder, |builder, p| builder.query(&[("self", p)]));`,
+		SkipIfIsDefault:    true,
+		OtherFieldsInGroup: []*api.Field{branchCrate, branchSuper},
+	}
+	t.Run("branch_self", func(t *testing.T) {
+		if diff := cmp.Diff(wantSelfBranch, branchSelf.Codec, ignoreField); diff != "" {
+			t.Errorf("mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	wantCrateBranch := &fieldAnnotations{
+		FieldName:          "crate_",
+		SetterName:         "crate",
+		BranchName:         "Crate",
+		ProstBranchName:    "Crate",
+		FQMessageName:      "crate::model::Message",
+		FieldType:          "std::string::String",
+		PrimitiveFieldType: "std::string::String",
+		AddQueryParameter:  `let builder = req.crate_().iter().fold(builder, |builder, p| builder.query(&[("crate", p)]));`,
+		OtherFieldsInGroup: []*api.Field{branchSelf, branchSuper},
+	}
+	t.Run("branch_crate", func(t *testing.T) {
+		if diff := cmp.Diff(wantCrateBranch, branchCrate.Codec, ignoreField); diff != "" {
+			t.Errorf("mismatch (-want +got):\n%s", diff)
+		}
+	})
+
+	wantSuperBranch := &fieldAnnotations{
+		FieldName:          "super_",
+		SetterName:         "super",
+		BranchName:         "Super",
+		ProstBranchName:    "Super",
+		FQMessageName:      "crate::model::Message",
+		FieldType:          "i32",
+		PrimitiveFieldType: "i32",
+		AddQueryParameter:  `let builder = req.super_().iter().fold(builder, |builder, p| builder.query(&[("super", p)]));`,
+		SerdeAs:            "wkt::internal::I32",
+		SkipIfIsDefault:    true,
+		OtherFieldsInGroup: []*api.Field{branchSelf, branchCrate},
+	}
+	t.Run("branch_super", func(t *testing.T) {
+		if diff := cmp.Diff(wantSuperBranch, branchSuper.Codec, ignoreField); diff != "" {
+			t.Errorf("mismatch (-want +got):\n%s", diff)
+		}
+	})
 }

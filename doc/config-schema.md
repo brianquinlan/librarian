@@ -176,16 +176,16 @@ This document describes the schema for the librarian.yaml.
 | `replace_regex` | list of [ReplaceRegexConfig](#replaceregexconfig-configuration) | Contains regular expression replacement rules. |
 | `copy_file` | list of [CopyConfig](#copyconfig-configuration) | Contains file copy rules. |
 | `remove_file` | list of string | Contains glob patterns of files to remove. |
-| `method_operations` | list of [MethodOperation](#methodoperation-configuration) | Contains method-level operations (`delete`, `copy_and_rename`, `duplicate`, `deprecate`). |
+| `method_operations` | list of [MethodOperation](#methodoperation-configuration) | Contains method-level operations (`delete`, `copy_and_rename`, `deprecate`). |
 
 ## MethodOperation Configuration
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
 | `path` | string | Specifies the relative file path to modify. |
-| `action` | string | Specifies the operation (`delete`, `copy_and_rename`, `duplicate`, or `deprecate`). |
+| `action` | string | Specifies the operation (`delete`, `copy_and_rename`, or `deprecate`). |
 | `func_name` | string | Specifies the target method name. |
-| `new_name` | string | Specifies the new method name for copy_and_rename or duplicate operations. |
+| `new_name` | string | Specifies the new method name for copy_and_rename operations. |
 | `deprecation_message` | string | Specifies the deprecation message for deprecate operations. |
 
 ## ReplaceConfig Configuration
@@ -346,12 +346,22 @@ This document describes the schema for the librarian.yaml.
 | `disabled_generator_features` | list of string | Provides a mechanism for disabling generator features at the API level. These features will be disabled if both specified in EnabledGeneratorFeatures and DisabledGeneratorFeatures. |
 | `enabled_generator_features` | list of string | Provides a mechanism for enabling generator features at the API level. |
 | `import_path` | string | Is the Go import path for the API. |
+| `internal_copies` | list of [GoInternalCopy](#gointernalcopy-configuration) (optional) | Lists private copies of the API's messages to generate into internal Go packages, so that an additional protoc plugin can run on each copy without its output becoming part of the public API surface. Each copy is generated from the proto files in the API directory, without services, under a renamed proto package so that it can be linked beside the public package. Copies require the open protobuf API level. A copy directory holds generated code only and is removed entirely before regeneration, so handwritten code must live outside it. |
 | `nested_protos` | list of string | Is a list of nested proto files. |
 | `no_metadata` | bool | Indicates whether to skip generating gapic_metadata.json. This is typically false. |
 | `no_snippets` | bool | Indicates whether to skip generating snippets. This is typically false. |
 | `proto_api_level` | string | Allows direct control of protobuf plugin's code generation level. Values allowed are API_OPEN, API_HYBRID, and API_OPAQUE. The default is unset, which relies on proto file annotations. More info: https://protobuf.dev/reference/go/opaque-migration/ |
 | `proto_only` | bool | Determines whether to generate a Proto-only client. A proto-only client does not define a service in the proto files. |
 | `proto_package` | string | Is the proto package name. |
+
+## GoInternalCopy Configuration
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `import_path` | string | Is the Go import path of the copy, relative to cloud.google.com/go, in canonical form and inside the library's own module. It must contain an "internal" path element so that the copy cannot be imported by users of the library, and must not overlap the directory of another copy or of a generated client. Existing symlinks below the library output directory are rejected before generation. |
+| `plugin` | string | Is the required additional protoc plugin, without the "protoc-gen-" prefix, for example "go-vtproto". The binary is looked up in the Go tool bin directory, then on the PATH. Declare its Go module under tools.go. The name must contain only letters, digits, "-", or "_". |
+| `plugin_options` | list of string | Are passed as `--<plugin>_opt` values. The plugin must write its output next to protoc-gen-go's, under the Go import path. Layout options `paths=`, `module=`, and `M<file>=` import mappings are rejected, including in comma-separated parameter lists. |
+| `proto_package` | string | Is the proto package of the copy. It must be a valid proto package name that differs from the proto package of the API and of every other copy. |
 
 ## GoModule Configuration
 
@@ -369,7 +379,6 @@ This document describes the schema for the librarian.yaml.
 | `additional_protos` | list of [AdditionalProto](#additionalproto-configuration) (optional) | Is a list of additional proto files to include in generation. By default, these files are used purely as compilation dependencies for the GAPIC generator. Note: google/cloud/common_resources.proto is included by default unless OmitCommonResources is set to true. |
 | `omit_common_resources` | bool | Indicates whether to omit the default inclusion of google/cloud/common_resources.proto. |
 | `excluded_protos` | list of string | Is a list of proto files to exclude from generation. It expects the full path starting from the root of the googleapis directory (e.g., "google/cloud/aiplatform/v1/schema/io_format.proto"). |
-| `skip_proto_class_generation` | list of string | Is a list of proto files to exclude from generating proto module, but included in generating gRPC or GAPIC modules and packaged proto files. It expects the full path starting from the root of the googleapis directory (e.g., "google/cloud/aiplatform/v1beta1/schema/geometry.proto"). TODO(https://github.com/googleapis/librarian/issues/5661): remove after migration. |
 | `gapic_artifact_id_override` | string | Overrides the artifact ID for the GAPIC module. It determines the module's directory name and is used to derive proto and gRPC artifact IDs if they are not explicitly overridden. |
 | `grpc_artifact_id_override` | string | Overrides the artifact ID for the gRPC module. The artifact ID is also used as the name for the module's directory. |
 | `proto_artifact_id_override` | string | Overrides the artifact ID for the proto module. The artifact ID is also used as the name for the module's directory. |
@@ -386,6 +395,7 @@ This document describes the schema for the librarian.yaml.
 | :--- | :--- | :--- |
 | `custom_group_ids` | map[string]string | Maps API path prefixes (e.g., "google/shopping") to their corresponding Maven Group IDs (e.g., "com.google.shopping"). Use this to override the default "com.google.cloud" Group ID for specific API paths (e.g., maps, ads, shopping). |
 | `libraries_bom_version` | string | Is the version of the libraries-bom to use for Java. This must be set in the default configuration. |
+| `min_java_version` | int | Is the minimum Java version required, used only in README generation. Defaults to 8 if unspecified. |
 
 ## JavaFileCopy Configuration
 
@@ -407,12 +417,10 @@ This document describes the schema for the librarian.yaml.
 | `client_documentation_override` | string | Allows the "client_documentation" field in .repo-metadata.json to be overridden. |
 | `codeowner_team` | string | Is the GitHub team that owns the code. |
 | `excluded_poms` | list of string | Is a list of artifact ids, whose module should be excluded when updating pom.xml and are omitted when counting new modules. |
-| `extra_versioned_modules` | string | Is a list of extra versioned modules. |
 | `group_id` | string | Is the Maven group ID, defaults to "com.google.cloud". |
 | `issue_tracker_override` | string | Allows the "issue_tracker" field in .repo-metadata.json to be overridden. |
 | `released_version` | string | Is the last released version of the library. If omitted, it will be derived from the library version. Note: It assumes a minor bump from the previous '.0' version (e.g., '1.2.0-SNAPSHOT' -> '1.1.0') and does not support deriving previous patch releases (e.g., '1.1.1'). |
 | `library_type_override` | string | Allows the "library_type" field in .repo-metadata.json to be overridden. |
-| `min_java_version` | int | Is the minimum Java version required. |
 | `name_pretty_override` | string | Allows the "name_pretty" field in .repo-metadata.json to be overridden. |
 | `product_documentation_override` | string | Allows the "product_documentation" field in .repo-metadata.json to be overridden. |
 | `recommended_package` | string | Is the recommended package name. |
@@ -429,6 +437,7 @@ This document describes the schema for the librarian.yaml.
 | :--- | :--- | :--- |
 | `additional_protos` | list of string | Is a list of additional proto files to include in generation. |
 | `diregapic` | bool | Indicates whether generation uses DIREGAPIC (Discovery REST GAPICs). This is typically false. Used for the GCE (compute) client. |
+| `exclude_protos` | list of string | Is a list of proto files to exclude from generation. It expects the full path starting from the root of the googleapis directory (e.g., "google/cloud/aiplatform/v1/schema/io_format.proto"). |
 | `mixins` | string | Controls mixin behavior for this API (e.g., "none" to disable). When set, this overrides the package-level mixins setting. |
 | `omit_common_resources` | bool | Indicates whether to omit the default inclusion of google/cloud/common_resources.proto. |
 | `path` | string | Is the source path. |
@@ -451,7 +460,7 @@ This document describes the schema for the librarian.yaml.
 | `extra_protoc_parameters` | list of string | Is a list of extra parameters to pass to protoc. |
 | `handwritten_layer` | bool | Indicates the library has a handwritten layer on top of the generated code. |
 | `main_service` | string | Is the name of the main service for libraries with a handwritten layer. |
-| `package_name` | string | Is the npm package name (e.g., "@google-cloud/access-approval"). |
+| `package_name` | string | Is the npm package name (e.g., "@google-cloud/access-approval"). For standard Google Cloud libraries ("google-cloud-*"), it is automatically derived as "@google-cloud/<suffix>" if omitted. For non-cloud libraries, this is required and must be configured explicitly or populated during "librarian add". |
 | `client_documentation_override` | string | Allows the client_documentation field in .repo-metadata.json to be overridden from the default that's inferred. |
 | `metadata_name_override` | string | Allows the name field in .repo-metadata.json to be overridden. |
 | `name_pretty_override` | string | Allows the name_pretty field in .repo-metadata.json to be overridden. |
@@ -547,6 +556,8 @@ This document describes the schema for the librarian.yaml.
 | `included_ids` | list of string | Is a list of IDs to include. |
 | `skipped_ids` | list of string | Is a list of IDs to skip. |
 | `disabled_clippy_warnings` | list of string | Is a list of clippy warnings to disable. |
+| `handwritten_surface` | string | Indicates whether the crate or specific services have a handwritten surface. Accepts "true" for all services, or a comma-separated list of service IDs. |
+| `extensible_builders` | list of string | Is a list of method IDs whose generated request builders expose pub(crate) internals. |
 | `has_veneer` | bool | Indicates whether the crate has a veneer. |
 | `routing_required` | bool | Indicates whether routing is required. |
 | `include_grpc_only_methods` | bool | Indicates whether to include gRPC-only methods. |
@@ -555,9 +566,11 @@ This document describes the schema for the librarian.yaml.
 | `post_process_protos` | string | Indicates whether to post-process protos. |
 | `documentation_overrides` | list of [RustDocumentationOverride](#rustdocumentationoverride-configuration) | Contains overrides for element documentation. |
 | `pagination_overrides` | list of [RustPaginationOverride](#rustpaginationoverride-configuration) | Contains overrides for pagination configuration. |
+| `message_module_name_overrides` | map[string]string | Contains codec-level overrides for message module names in model.rs. |
 | `name_overrides` | string | Contains codec-level overrides for type and service names. |
 | `discovery` | RustDiscovery (optional) | Contains discovery-specific configuration for LRO polling. |
 | `quickstart_service_override` | string | Overrides the default heuristically selected service for the package-level quickstart. |
+| `internal_modules` | list of string | Is a list of kept extra modules that should have pub(crate) visibility instead of pub. |
 
 ## RustDefault Configuration
 
@@ -570,10 +583,7 @@ This document describes the schema for the librarian.yaml.
 | `detailed_tracing_attributes` | bool (optional) | Indicates whether to include detailed tracing attributes. |
 | `lro_stub_options` | bool (optional) | Indicates whether to include LRO poller options in generated stub traits. |
 | `resource_name_heuristic` | bool (optional) | Indicates whether to apply heuristics to identify and generate resource names. |
-| `include_bidi_streaming_methods` | bool (optional) | Indicates whether to include gRPC bi-directional streaming methods. |
-| `include_server_streaming_methods` | bool (optional) | Indicates whether to include gRPC server-side streaming methods. |
 | `allow_grpc_any_fields` | list of string | Is a list of protobuf field IDs with google.protobuf.Any permitted in gRPC/streaming RPCs (their fields will be dropped in prost conversion). |
-| `allow_streaming_any_types` | list of string | Is deprecated: use allow_grpc_any_fields instead. |
 | `grpc_client` | string | Is the Rust type used for the inner gRPC client in generated transports. Defaults to "gaxi::grpc::Client". |
 | `default_transport` | string | Specifies the default transport protocol for unary methods ("grpc" or "http"). Defaults to "http". |
 
@@ -604,11 +614,12 @@ This document describes the schema for the librarian.yaml.
 | `idempotency_hook` | string | Configures an opt-in method on the request struct to resolve and transform idempotency request options before dispatch. |
 | `include_list` | yaml.StringSlice | Is a list of proto files to include (e.g., "date.proto", "expr.proto"). |
 | `include_streaming_methods` | bool | Indicates whether to include gRPC streaming methods. |
-| `include_bidi_streaming_methods` | bool (optional) | Indicates whether to include gRPC bi-directional streaming methods. |
-| `include_server_streaming_methods` | bool (optional) | Indicates whether to include gRPC server-side streaming methods. |
+| `handwritten_surface` | string | Indicates whether the module or specific services have a handwritten surface. Accepts "true" for all services, or a comma-separated list of service IDs. |
 | `internal_builders` | bool | Indicates whether generated builders should be internal to the crate. |
+| `extensible_builders` | list of string | Is a list of method IDs whose generated request builders expose pub(crate) internals. |
 | `module_path` | string | Is the Rust module path for converters (e.g., "crate::generated::gapic::model"). |
 | `module_roots` | map[string]string |  |
+| `message_module_name_overrides` | map[string]string | Contains codec-level overrides for message module names in model.rs. |
 | `name_overrides` | string | Contains codec-level overrides for type and service names. |
 | `output` | string | Is the directory where generated code is written (e.g., "src/storage/src/generated/gapic"). |
 | `post_process_protos` | string | Contains code to post-process generated protos. |
@@ -656,7 +667,7 @@ This document describes the schema for the librarian.yaml.
 | `url` | string | Configures the `url:` parameter in the package definition.<br><br>For example, `https://github.com/apple/swift-protobuf` would generate the following snippet in the `Package.swift` files:<br><br>``` .package(url: "https://github.com/apple/swift-protobuf") ``` |
 | `version` | string | Configures the minimum version for external package definitions.<br><br>For example, if the `swift-protobuf` package used `1.36.1`, then the codec would generate the following snippet in the `Package.swift` files:<br><br>``` .package(url: "https://github.com/apple/swift-protobuf", from: "1.36.1") ``` |
 | `required_by_services` | bool | Is true if this dependency is required by packages with services.<br><br>This will be set for the `gax` library and the `auth` library. Maybe more if we split the HTTP and gRPC clients into separate libraries. |
-| `api_package` | string | Is the name of the API package provided by this library.<br><br>In Swift a package contains at most one channel for one API. For packages that implement an API, this field contains the name of the package in the specification language of that API. At the moment this is only used by Protobuf-based APIs, as OpenAPI and discovery doc APIs are self-contained.<br><br>Note that some packages, for example `auth` and `gax`, do not implement APIs. This field is empty for such libraries.<br><br>Examples:<br>- The `GoogleCloudWKT` package will set this to `google.cloud.protobuf`.<br>- The `GoogleCloudLocation` package will set this to `google.cloud.location`. |
+| `api_package` | string | Is the name of the API package provided by this library.<br><br>In Swift a package contains at most one channel for one API. For packages that implement an API, this field contains the name of the package in the specification language of that API. At the moment this is only used by Protobuf-based APIs, as OpenAPI and discovery doc APIs are self-contained.<br><br>Note that some packages, for example `auth` and `gax`, do not implement APIs. This field is empty for such libraries.<br><br>Examples:<br>- The `GoogleWKT` package will set this to `google.cloud.protobuf`.<br>- The `GoogleCloudLocation` package will set this to `google.cloud.location`. |
 | `spi` | string | If set, the dependency requires an `@_spi(...)` attribute. |
 
 ## SwiftModule Configuration
@@ -672,6 +683,7 @@ This document describes the schema for the librarian.yaml.
 | `skipped_ids` | list of string | Is a list of proto IDs to skip in generation for this module. |
 | `module_path` | string | Is the module import path or target containing stubs (used by convert-swift and gRPC transports). |
 | `name_overrides` | map[string]string | Contains codec-level overrides for service names for this module. |
+| `idempotency_hook` | string | Configures an opt-in method on the request struct to resolve and transform idempotency request options before dispatch for this module. |
 
 ## SwiftPackage Configuration
 
@@ -688,6 +700,9 @@ This document describes the schema for the librarian.yaml.
 | `per_service_traits` | bool | Enables per-service compile-time flags. |
 | `default_traits` | list of string | Is a list of compile-time traits enabled by default. |
 | `discovery` | SwiftDiscovery (optional) | Contains discovery-specific configuration for LRO polling. |
+| `lro_any_converter` | string | Names the generated converter for the `Any` fields of `google.longrunning.Operation` (e.g. "StorageControlLROAnyConverter"), which converts long-running operation payloads by type URL. Cannot be combined with `per_service_traits`. |
+| `quickstart_service_override` | string | Overrides the default heuristically selected service for the package-level quickstart. |
+| `idempotency_hook` | string | Configures an opt-in method on the request struct to resolve and transform idempotency request options before dispatch. |
 
 ## SwiftTool Configuration
 

@@ -86,6 +86,18 @@ type SwiftPackage struct {
 
 	// Discovery contains discovery-specific configuration for LRO polling.
 	Discovery *SwiftDiscovery `yaml:"discovery,omitempty"`
+
+	// LROAnyConverter names the generated converter for the `Any` fields of
+	// `google.longrunning.Operation` (e.g. "StorageControlLROAnyConverter"),
+	// which converts long-running operation payloads by type URL. Cannot be
+	// combined with `per_service_traits`.
+	LROAnyConverter string `yaml:"lro_any_converter,omitempty"`
+
+	// QuickstartServiceOverride overrides the default heuristically selected service for the package-level quickstart.
+	QuickstartServiceOverride string `yaml:"quickstart_service_override,omitempty"`
+
+	// IdempotencyHook configures an opt-in method on the request struct to resolve and transform idempotency request options before dispatch.
+	IdempotencyHook string `yaml:"idempotency_hook,omitempty"`
 }
 
 // SwiftDependency represents a dependency in Swift Package Manager.
@@ -141,7 +153,7 @@ type SwiftDependency struct {
 	// empty for such libraries.
 	//
 	// Examples:
-	// - The `GoogleCloudWKT` package will set this to `google.cloud.protobuf`.
+	// - The `GoogleWKT` package will set this to `google.cloud.protobuf`.
 	// - The `GoogleCloudLocation` package will set this to `google.cloud.location`.
 	ApiPackage string `yaml:"api_package,omitempty"`
 	// SpiAttribute if set, the dependency requires an `@_spi(...)` attribute.
@@ -183,6 +195,9 @@ type SwiftModule struct {
 
 	// NameOverrides contains codec-level overrides for service names for this module.
 	NameOverrides map[string]string `yaml:"name_overrides,omitempty"`
+
+	// IdempotencyHook configures an opt-in method on the request struct to resolve and transform idempotency request options before dispatch for this module.
+	IdempotencyHook string `yaml:"idempotency_hook,omitempty"`
 }
 
 // SwiftDiscovery contains discovery-specific configuration for LRO polling.

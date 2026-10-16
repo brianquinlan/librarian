@@ -31,14 +31,9 @@ func TestGenerateService_Telemetry(t *testing.T) {
 	req := api.NewTestMessage("GetSecretRequest").
 		WithPackage("google.cloud.test.v1").
 		WithFields(
-			&api.Field{
-				Name:  "project",
-				Typez: api.TypezString,
-			},
-			&api.Field{
-				Name:  "secret",
-				Typez: api.TypezString,
-			})
+			api.NewTestField("project").WithType(api.TypezString),
+			api.NewTestField("secret").WithType(api.TypezString),
+		)
 	res := api.NewTestMessage("Secret").WithPackage("google.cloud.test.v1")
 
 	method := api.NewTestMethod("GetSecret").
@@ -57,8 +52,7 @@ func TestGenerateService_Telemetry(t *testing.T) {
 		WithPackage("google.cloud.test.v1").
 		WithMethods(method)
 
-	model := api.NewTestAPI([]*api.Message{req, res}, []*api.Enum{}, []*api.Service{service})
-	model.PackageName = "google.cloud.test.v1"
+	model := api.NewTestAPI([]*api.Message{req, res}, nil, []*api.Service{service})
 	library := &config.Library{
 		Version: "1.2.3-preview",
 		Swift:   swiftConfig(t, nil),
@@ -94,7 +88,7 @@ func checkStubContents(t *testing.T, outDir string) {
 	}
 	contentStr := string(content)
 	got := extractBlock(t, contentStr, "req.addHeader(name: ", "value: Clients.clientHeader)")
-	want := `req.addHeader(name: GoogleCloudGax._HeaderNames.apiClient, value: Clients.clientHeader)`
+	want := `req.addHeader(name: GoogleGax._HeaderNames.apiClient, value: Clients.clientHeader)`
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("mismatch (-want +got):\n%s", diff)
 	}

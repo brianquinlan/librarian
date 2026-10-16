@@ -29,34 +29,23 @@ import (
 func TestGenerateServerStreaming(t *testing.T) {
 	outDir := t.TempDir()
 
-	request := api.NewTestMessage("ExpandRequest").WithPackage("test.v1")
-	requestId := &api.Field{
-		Name:          "request_id",
-		JSONName:      "requestId",
-		ID:            ".test.v1.ExpandRequest.request_id",
-		Typez:         api.TypezString,
-		AutoPopulated: true,
-	}
-	request.Fields = []*api.Field{
-		{
-			Name:     "content",
-			JSONName: "content",
-			ID:       ".test.v1.ExpandRequest.content",
-			Typez:    api.TypezString,
-		},
-		requestId,
-	}
+	requestID := api.NewTestField("request_id").WithType(api.TypezString).WithAutoPopulated()
+	content := api.NewTestField("content").WithType(api.TypezString)
+	request := api.NewTestMessage("ExpandRequest").
+		WithPackage("test.v1").
+		WithFields(content, requestID)
 	response := api.NewTestMessage("EchoResponse").WithPackage("test.v1")
 
-	serverMethod := api.NewTestMethod("Expand").WithInput(request).WithOutput(response).WithServerSideStreaming()
-	serverMethod.AutoPopulated = []*api.Field{requestId}
-	serverMethod.PathInfo = &api.PathInfo{
-		Bindings: []*api.PathBinding{{Verb: "POST", PathTemplate: &api.PathTemplate{}}},
-	}
+	serverMethod := api.NewTestMethod("Expand").
+		WithInput(request).
+		WithOutput(response).
+		WithServerSideStreaming().
+		WithVerb("POST").
+		WithPathTemplate(&api.PathTemplate{}).
+		WithAutoPopulated(requestID)
 	service := api.NewTestService("Echo").WithPackage("test.v1").WithMethods(serverMethod)
 
-	model := api.NewTestAPI([]*api.Message{request, response}, []*api.Enum{}, []*api.Service{service})
-	model.PackageName = "test.v1"
+	model := api.NewTestAPI([]*api.Message{request, response}, nil, []*api.Service{service})
 	if err := api.CrossReference(model); err != nil {
 		t.Fatal(err)
 	}
@@ -64,12 +53,11 @@ func TestGenerateServerStreaming(t *testing.T) {
 	cfg := &parser.ModelConfig{
 		SpecificationFormat: libconfig.SpecProtobuf,
 		Codec: map[string]string{
-			"package:wkt":                      "source=google.protobuf,package=google-cloud-wkt",
-			"package:prost":                    "package=prost,used-if=streaming",
-			"package:prost-types":              "package=prost-types,used-if=streaming",
-			"include-server-streaming-methods": "true",
-			"generate-rpc-samples":             "true",
-			"detailed-tracing-attributes":      "true",
+			"package:wkt":                 "source=google.protobuf,package=google-cloud-wkt",
+			"package:prost":               "package=prost,used-if=streaming",
+			"package:prost-types":         "package=prost-types,used-if=streaming",
+			"generate-rpc-samples":        "true",
+			"detailed-tracing-attributes": "true",
 		},
 	}
 	if err := Generate(t.Context(), model, outDir, cfg); err != nil {
@@ -356,25 +344,22 @@ prost.workspace      = true
 func TestGenerateGrpcClientServerStreaming(t *testing.T) {
 	outDir := t.TempDir()
 
-	request := api.NewTestMessage("ExpandRequest").WithPackage("test.v1")
-	request.Fields = []*api.Field{
-		{
-			Name:     "content",
-			JSONName: "content",
-			ID:       ".test.v1.ExpandRequest.content",
-			Typez:    api.TypezString,
-		},
-	}
+	request := api.NewTestMessage("ExpandRequest").
+		WithPackage("test.v1").
+		WithFields(
+			api.NewTestField("content").WithType(api.TypezString),
+		)
 	response := api.NewTestMessage("EchoResponse").WithPackage("test.v1")
 
-	serverMethod := api.NewTestMethod("Expand").WithInput(request).WithOutput(response).WithServerSideStreaming()
-	serverMethod.PathInfo = &api.PathInfo{
-		Bindings: []*api.PathBinding{{Verb: "POST", PathTemplate: &api.PathTemplate{}}},
-	}
+	serverMethod := api.NewTestMethod("Expand").
+		WithInput(request).
+		WithOutput(response).
+		WithServerSideStreaming().
+		WithVerb("POST").
+		WithPathTemplate(&api.PathTemplate{})
 	service := api.NewTestService("Echo").WithPackage("test.v1").WithMethods(serverMethod)
 
-	model := api.NewTestAPI([]*api.Message{request, response}, []*api.Enum{}, []*api.Service{service})
-	model.PackageName = "test.v1"
+	model := api.NewTestAPI([]*api.Message{request, response}, nil, []*api.Service{service})
 	if err := api.CrossReference(model); err != nil {
 		t.Fatal(err)
 	}
@@ -382,9 +367,8 @@ func TestGenerateGrpcClientServerStreaming(t *testing.T) {
 	cfg := &parser.ModelConfig{
 		SpecificationFormat: libconfig.SpecProtobuf,
 		Codec: map[string]string{
-			"template-override":                "templates/grpc-client",
-			"package:wkt":                      "source=google.protobuf,package=google-cloud-wkt",
-			"include-server-streaming-methods": "true",
+			"template-override": "templates/grpc-client",
+			"package:wkt":       "source=google.protobuf,package=google-cloud-wkt",
 		},
 	}
 	if err := Generate(t.Context(), model, outDir, cfg); err != nil {
